@@ -345,6 +345,7 @@
   <span class="wordmark">CNSMDP <em>Atelier de rédaction</em></span>
   <span class="spacer"></span>
   <span class="save-state" id="saveState">—</span>
+  <button class="btn btn--ghost btn--sm" onclick="openImport()">Importer</button>
   <button class="btn btn--ghost btn--sm" onclick="loadProject()">Charger</button>
   <button class="btn btn--ghost btn--sm" onclick="saveProject()">Enregistrer</button>
   <button class="btn btn--ghost btn--sm" onclick="openPreview()">Aperçu</button>
@@ -388,7 +389,34 @@
   </div>
 </div>
 
+<div class="overlay" id="importOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Importer un document</h3>
+      <button class="x" onclick="closeImport()">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="margin-top:0">Convertissez un document existant en markdown, puis insérez-le comme blocs
+      dans le chapitre sélectionné. Formats acceptés : <b>Word (.docx)</b>, <b>PDF</b>, <b>PowerPoint (.pptx, .ppt)</b>,
+      ainsi que .odt, .rtf, .html, .txt, .md.
+      <br><span style="color:var(--ink-faint)">La conversion utilise le serveur local (pandoc) si disponible, sinon une conversion directe dans le navigateur.
+      Le .ppt ancien nécessite le serveur local.</span></p>
+      <button class="btn btn--primary" onclick="pickImportFile()">Choisir un fichier…</button>
+      <div id="importStatus" class="hint" style="margin-top:10px"></div>
+      <div id="importPreviewWrap" style="display:none;margin-top:12px">
+        <label class="lab">Markdown converti — relisez et corrigez si besoin</label>
+        <textarea id="importPreview" class="txt" style="min-height:240px;font-family:var(--font-mono,monospace);font-size:var(--text-sm)"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeImport()">Annuler</button>
+      <button class="btn btn--primary" id="importInsert" onclick="confirmImport()" disabled>Insérer dans le chapitre</button>
+    </div>
+  </div>
+</div>
+
 <input type="file" id="fileInput" accept=".json,.md" style="display:none">
+<input type="file" id="importInput" accept=".docx,.doc,.pdf,.ppt,.pptx,.odt,.rtf,.html,.htm,.txt,.md" style="display:none" onchange="runImport(this.files[0]); this.value='';">
 <div class="toast" id="toast"></div>
 
 <!-- Source unique des blocs (métadonnées UI partagées avec le learning editor).
@@ -734,17 +762,23 @@ function migrateLesson(L){
 }
 
 function saveProject(){
-  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
-  triggerDownload(blob, slug(state.meta.title)+'.atelier.json');
-  toast('Brouillon enregistré sur votre ordinateur');
+  // Format de projet = Markdown (grammaire de référence), réouvrable via « Charger ».
+  const blob=new Blob([md()],{type:'text/markdown'});
+  triggerDownload(blob, slug(state.meta.title)+'.md');
+  toast('Cours enregistré au format Markdown (.md)');
 }
 function loadProject(){
   const inp=document.getElementById('fileInput');
   inp.onchange=e=>{
     const f=e.target.files[0]; if(!f) return;
+    const name=(f.name||'').toLowerCase();
     const r=new FileReader();
-    r.onload=()=>{ try{ state=JSON.parse(r.result); selected={type:'intro'}; render(); markDirty(); toast('Brouillon chargé'); }
-      catch(err){ toast('Fichier illisible'); } };
+    r.onload=()=>{ try{
+        // .atelier.json (héritage) → JSON ; .md → reparse via la grammaire.
+        state = name.endsWith('.json') ? JSON.parse(r.result) : mdToState(r.result);
+        migrateState(); selected={type:'intro'}; render(); markDirty();
+        toast(name.endsWith('.json')?'Brouillon chargé':'Cours chargé (.md)');
+      } catch(err){ console.error(err); toast('Fichier illisible'); } };
     r.readAsText(f); inp.value='';
   };
   inp.click();
@@ -1573,6 +1607,304 @@ function md(){
   if(es.length){ out+=`:::a_retenir\n`+es.map(x=>'- '+x).join('\n')+`\n:::\n\n`; }
   out+=`:::navigation_button\n:::\n`;
   return out;
+}
+
+/* ============================================================
+   MARKDOWN → ÉTAT  (aller-retour : inverse de md())
+   ============================================================
+   Reparse un .md produit par l'atelier (ou la grammaire de référence)
+   vers l'objet `state`. Tolérant : tout ce qui n'est pas reconnu retombe
+   en bloc paragraphe sans perte de contenu. */
+
+// Parse la chaîne d'attributs d'une fence (sans accolades) → objet.
+function parseAttrs(s){
+  const o={}; if(!s) return o;
+  const re=/([\w-]+)\s*=\s*(?:"([^"]*)"|([^\s}]+))/g; let m;
+  while((m=re.exec(s))){ o[m[1]] = (m[2]!=null?m[2]:m[3]); }
+  return o;
+}
+// Frontmatter YAML simple → meta + corps.
+function parseFront(text){
+  const meta={ title:'Mon cours', authors:'', public:'', duration:'', date:new Date().toISOString().slice(0,10) };
+  const m=text.match(/^---\n([\s\S]*?)\n---\n?/);
+  if(m){ m[1].split('\n').forEach(line=>{ const mm=line.match(/^(\w+):\s*"?(.*?)"?\s*$/);
+    if(mm && ['title','authors','public','duration','date'].includes(mm[1])) meta[mm[1]]=mm[2]; }); }
+  return { meta, body: m?text.slice(m[0].length):text };
+}
+// Découpe le corps en tokens : fence / h1 / h2 / commentaire / run natif.
+function tokenizeMd(body){
+  const L=String(body||'').replace(/\r\n/g,'\n').split('\n');
+  const toks=[]; let i=0;
+  const struct=l=>/^:::\S/.test(l)||/^#\s+/.test(l)||/^##\s+/.test(l)||/^\s*<!--/.test(l);
+  while(i<L.length){
+    const l=L[i];
+    if(/^\s*$/.test(l)){ i++; continue; }
+    if(/^\s*<!--/.test(l)){ let buf=l; while(!/-->/.test(buf)&&i+1<L.length){ i++; buf+='\n'+L[i]; }
+      toks.push({kind:'comment',text:buf.replace(/^\s*<!--/,'').replace(/-->\s*$/,'').trim()}); i++; continue; }
+    if(/^:::\S/.test(l)){ const fm=l.match(/^:::(\S+)\s*(\{[^}]*\})?/); const type=fm[1];
+      const attrs=parseAttrs(fm[2]?fm[2].slice(1,-1):''); const bl=[]; i++;
+      while(i<L.length && L[i].trim()!==':::'){ bl.push(L[i]); i++; } i++;
+      toks.push({kind:'fence',type,attrs,body:bl.join('\n').trim()}); continue; }
+    if(/^#\s+/.test(l)){ toks.push({kind:'h1',text:l.replace(/^#\s+/,'').trim()}); i++; continue; }
+    if(/^##\s+/.test(l)){ toks.push({kind:'h2',text:l.replace(/^##\s+/,'').trim()}); i++; continue; }
+    const run=[]; while(i<L.length){ const x=L[i]; if(/^\s*$/.test(x)){ i++; break; } if(struct(x)) break; run.push(x); i++; }
+    if(run.length) toks.push({kind:'native',raw:run.join('\n')});
+  }
+  return toks;
+}
+// — Helpers inverses —
+function fromBullets(b){ return lines(b).map(x=>x.replace(/^[-*]\s+/,'')).join('\n'); }
+function fromTakeaways(b){ return lines(b).map(x=>x.replace(/^[-*]\s+/,'').replace(/^takeaway:\s*/,'')).join('\n'); }
+function splitTranscript(b){ const m=b.match(/(?:^|\n)###\s*Transcript\s*\n([\s\S]*)$/i);
+  if(m) return { main:b.slice(0,m.index).trim(), transcript:m[1].trim() }; return { main:b.trim(), transcript:'' }; }
+function fromResources(b){ const out=[]; let cur=null;
+  b.split('\n').forEach(line=>{ let m;
+    if((m=line.match(/^\s*-\s*title:\s*(.*)$/))){ if(cur)out.push(cur); cur={t:m[1].trim(),u:'',d:''}; }
+    else if(cur && (m=line.match(/^\s*url:\s*(.*)$/))){ cur.u=m[1].trim(); }
+    else if(cur && (m=line.match(/^\s*description:\s*(.*)$/))){ cur.d=m[1].trim(); } });
+  if(cur)out.push(cur);
+  return out.map(r=>{ const p=[r.t]; if(r.u||r.d)p.push(r.u); if(r.d)p.push(r.d); return p.join(' | '); }).join('\n'); }
+// QCM/QCU : body → groupes de questions {question, options:[{text,correct,feedback}]}
+function parseChoiceGroups(b){
+  const groups=[]; let g=null; const ng=()=>{ g={ql:[],options:[]}; groups.push(g); };
+  String(b||'').split('\n').forEach(line=>{
+    if(/^###\s*Question/i.test(line)){ ng(); return; }
+    const opt=line.match(/^\s*-\s*\[([ xX])\]\s*(.*)$/);
+    if(opt){ if(!g)ng(); g.options.push({text:opt[2].trim(),correct:opt[1].toLowerCase()==='x',feedback:''}); return; }
+    const fb=line.match(/^\s+>\s+(.+)$/);
+    if(fb && g && g.options.length){ const last=g.options[g.options.length-1]; last.feedback=last.feedback?last.feedback+' '+fb[1].trim():fb[1].trim(); return; }
+    if(line.trim()){ if(!g)ng(); if(!g.options.length) g.ql.push(line.trim()); }
+  });
+  const qs=groups.map(x=>({question:x.ql.join(' ').trim(), options:x.options}));
+  return qs.length?qs:[{question:'',options:[]}];
+}
+// Assessment / quiz final : body → {title,maxAttempts,questions[]}
+function parseAssessmentBody(a,b){
+  const questions=[]; let q=null, mode=''; const push=()=>{ if(q)questions.push(q); };
+  String(b||'').split('\n').forEach(line=>{
+    let m;
+    if((m=line.match(/^###\s*Q:\s*(.*)$/))){ push(); q={title:m[1].trim(),type:'MultipleChoice',raw:'',answer:'',solution:''}; mode='head'; return; }
+    if(!q) return;
+    if((m=line.match(/^Type:\s*(\w+)/))){ q.type=m[1]; return; }
+    if(/^####\s*Solution/i.test(line)){ mode='sol'; return; }
+    if((m=line.match(/^Answer:\s*(.*)$/))){ q.answer=m[1].trim(); return; }
+    if(mode!=='sol' && (m=line.match(/^\s*-\s*(.*)$/))){ const p=m[1].split('|').map(s=>s.trim());
+      const correct=/^(x|true|oui|1|✓)$/i.test(p[1]||''); const fb=p[2]||'';
+      q.raw=(q.raw?q.raw+'\n':'')+((p[0]||'')+(correct?' | x':' | ')+(fb?(' | '+fb):'')); return; }
+    if(mode==='sol' && line.trim()){ q.solution=(q.solution?q.solution+'\n':'')+line.trim(); return; }
+  });
+  push();
+  return { title:a.title||'', maxAttempts:a.maxAttempts||'', questions: questions.length?questions:[blankQuestion()] };
+}
+// Module sur-mesure : body labellisé → champs.
+function parseModuleBody(a,b){
+  const d={ title:a.title||'', goal:'', interaction:'', content:'', learnerFlow:'', reference:'', body:'' };
+  const rev={}; Object.keys(MODULE_INT_FR).forEach(k=>rev[MODULE_INT_FR[k].toLowerCase()]=k);
+  const rest=[];
+  String(b||'').split(/\n\s*\n/).forEach(c=>{ let m;
+    if((m=c.match(/^\*\*Objectif pédagogique\*\*\s*:\s*([\s\S]*)$/))) d.goal=m[1].trim();
+    else if((m=c.match(/^\*\*Type d'interaction\*\*\s*:\s*([\s\S]*)$/))){ const v=m[1].trim(); d.interaction=rev[v.toLowerCase()]||''; }
+    else if((m=c.match(/^\*\*Données ?\/ ?contenu\*\*\s*:\s*([\s\S]*)$/))) d.content=m[1].trim();
+    else if((m=c.match(/^\*\*Parcours apprenant·e\*\*\s*:\s*([\s\S]*)$/))) d.learnerFlow=m[1].trim();
+    else if((m=c.match(/^\*\*Références\*\*\s*:\s*([\s\S]*)$/))) d.reference=m[1].trim();
+    else if(c.trim()) rest.push(c.trim()); });
+  d.body=rest.join('\n\n');
+  return d;
+}
+// Registre des parseurs de fence (inverse de def.serialize). Clé = type de fence.
+const BLOCKPARSE={
+  columns:(a,b)=>{ const m=b.match(/###\s*left\s*\n([\s\S]*?)\n---\n###\s*right\s*\n([\s\S]*)$/i);
+    if(m) return { left:m[1].trim(), right:m[2].trim() };
+    const p=b.split(/\n---\n/); return { left:(p[0]||'').replace(/^###\s*left\s*\n?/i,'').trim(), right:(p[1]||'').replace(/^###\s*right\s*\n?/i,'').trim() }; },
+  plan:(a,b)=>({ title:a.title||'Plan', text:fromBullets(b) }),
+  citation:(a,b)=>({ body:b, author:a.author||'', role:a.role||'', source:a.source||'' }),
+  callout:(a,b)=>({ type:a.type||'note', title:a.title||'', body:b }),
+  objectifs:(a,b)=>({ title:a.title||'Objectifs', text:fromBullets(b) }),
+  video_expert:(a,b)=>{ const s=splitTranscript(b); return { title:a.title||'', expert:a.expert||'', role:a.role||'', src:a.src||'', transcript:s.transcript }; },
+  video:(a,b)=>({ title:a.title||'', src:a.src||'', startTime:a.startTime||'', endTime:a.endTime||'', body:b }),
+  audio:(a,b)=>{ const s=splitTranscript(b); return { title:a.title||'', src:a.src||'', startTime:a.startTime||'', endTime:a.endTime||'', transcript:s.transcript, body:s.main }; },
+  image:(a,b)=>({ src:'', alt:a.alt||'', caption:a.caption||'', body:b }),
+  illustration_brief:(a,b)=>({ title:a.title||'', style:a.style||'', referenceUrl:a.referenceUrl||'', body:b }),
+  motion_design:(a,b)=>({ title:a.title||'', repoUrl:a.repoUrl||'', duration:a.duration||'', body:b }),
+  interactive_module:(a,b)=>parseModuleBody(a,b),
+  image_with_text:(a,b)=>({ src:a.src||'', side:a.side||'left', body:b }),
+  pdf:(a,b)=>({ title:a.title||'', src:a.src||'', body:b }),
+  reflection:(a,b)=>({ title:a.title||'', feedback:a.feedback||'', body:b }),
+  listening:(a,b)=>({ title:a.title||'', src:a.src||'', body:b }),
+  a_retenir:(a,b)=>({ title:a.title||'', text:fromTakeaways(b) }),
+  resources:(a,b)=>({ title:a.title||'Ressources', text:fromResources(b) }),
+  qcm:(a,b)=>({ questions:parseChoiceGroups(b), explanation:a.explanation||'' }),
+  qcu:(a,b)=>({ question:a.question||'', options:parseChoiceGroups(b)[0].options }),
+  truefalse:(a,b)=>({ question:a.question||'', answer:a.answer==='false'?'false':'true', feedback:'' }),
+  assessment:(a,b)=>parseAssessmentBody(a,b),
+  quiz_final:(a,b)=>parseAssessmentBody(a,b),
+};
+const FENCE_TO_BLOCK={ interactive_module:'module_sur_mesure' };
+function fenceToBlock(type,attrs,body){
+  const bt=FENCE_TO_BLOCK[type]||type; const parser=BLOCKPARSE[type];
+  if(parser && BLOCKDEFS[bt]){ try{ return { type:bt, data:parser(attrs,body) }; }catch(e){} }
+  return { type:'paragraph', data:{ text:body||'' } };
+}
+// Bloc natif (paragraphe / liste / table / image) depuis un run de texte.
+function nativeChunkToBlock(chunk){
+  const t=chunk.trim();
+  const img=t.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/);
+  if(img && !t.includes('\n')) return { type:'image', data:{ src:img[2], alt:img[1]||'', caption:img[3]||'', body:'' } };
+  const ls=t.split('\n');
+  if(ls.length && ls.every(x=>/^[-*]\s+/.test(x))) return { type:'bullet_list', data:{ text:ls.map(x=>x.replace(/^[-*]\s+/,'')).join('\n') } };
+  if(ls.length && ls.every(x=>/^\d+\.\s+/.test(x))) return { type:'numbered_list', data:{ text:ls.map(x=>x.replace(/^\d+\.\s+/,'')).join('\n') } };
+  if(ls.length>=2 && /^\s*\|.*\|\s*$/.test(ls[0]) && /^\s*\|[\s\-:|]+\|\s*$/.test(ls[1])){
+    const sp=r=>r.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim());
+    const rows=[sp(ls[0])].concat(ls.slice(2).filter(x=>/\|/.test(x)).map(sp));
+    return { type:'table', data:{ text:rows.map(r=>r.join(' | ')).join('\n') } };
+  }
+  return { type:'paragraph', data:{ text:t } };
+}
+function nativeToBlocks(raw){ return String(raw||'').split(/\n\s*\n/).map(c=>c.trim()).filter(Boolean).map(nativeChunkToBlock); }
+
+// Reparse complet d'un .md atelier → state.
+function mdToState(text){
+  const f=parseFront(text);
+  const st={ meta:f.meta, intro:{intentions:'',objectives:'',prerequis:''}, parts:[], conclusion:{text:'',essentiel:''} };
+  const toks=tokenizeMd(f.body);
+  let region='intro', part=null, lesson=null, lessonObjSet=false;
+  const add=t=>{ if(lesson) lesson.blocks.push({ id:nid(), type:t.type, data:t.data }); };
+  const append=(o,k,v)=>{ o[k]=(o[k]?o[k]+'\n\n':'')+String(v).trim(); };
+  for(let i=0;i<toks.length;i++){ const tk=toks[i];
+    if(tk.kind==='h1'){
+      const pm=tk.text.match(/^Partie\s+\d+\s*[—–-]\s*(.*)$/);
+      if(pm){ region='part'; part={ id:nid(), title:pm[1].trim(), intention:'', lessons:[] }; st.parts.push(part); lesson=null; continue; }
+      if(/^Conclusion$/i.test(tk.text)){ region='conclusion'; lesson=null; continue; }
+      add({ type:'heading', data:{ text:tk.text } }); continue;
+    }
+    if(tk.kind==='h2'){
+      const nxt=toks[i+1];
+      if(nxt && nxt.kind==='comment' && /Chapitre\s*·/.test(nxt.text)){
+        if(!part){ part={ id:nid(), title:'', intention:'', lessons:[] }; st.parts.push(part); region='part'; }
+        lesson={ id:nid(), title:tk.text, durationMin:35, prereq:'', objectives:'', blocks:[], notes:'' };
+        const dm=nxt.text.match(/durée visée\s*:\s*(\d+)/); if(dm) lesson.durationMin=+dm[1];
+        const pr=nxt.text.match(/prérequis\s*:\s*([^·]+)$/); if(pr) lesson.prereq=pr[1].trim();
+        part.lessons.push(lesson); lessonObjSet=false; i++; continue;
+      }
+      add({ type:'subheading', data:{ text:tk.text } }); continue;
+    }
+    if(tk.kind==='comment'){ const nm=tk.text.match(/Notes pour l'équipe\s*:\s*([\s\S]*)$/); if(nm && lesson) lesson.notes=nm[1].trim(); continue; }
+    if(tk.kind==='native'){
+      if(region==='intro' && !lesson){ append(st.intro,'intentions',tk.raw); continue; }
+      if(region==='part' && part && !lesson){ append(part,'intention',tk.raw); continue; }
+      if(region==='conclusion'){ append(st.conclusion,'text',tk.raw); continue; }
+      nativeToBlocks(tk.raw).forEach(add); continue;
+    }
+    if(tk.kind==='fence'){ const t=tk.type, a=tk.attrs, b=tk.body;
+      if(t==='slide_intro'||t==='slide_break'||t==='navigation_button') continue;
+      if(t==='plan' && region==='intro') continue;
+      if(t==='objectifs'){
+        if(region==='intro' && !lesson){ st.intro.objectives=fromBullets(b); continue; }
+        if(lesson && !lessonObjSet && /chapitre/i.test(a.title||'')){ lesson.objectives=fromBullets(b); lessonObjSet=true; continue; }
+      }
+      if(t==='callout' && region==='intro' && !lesson && /prérequis/i.test(a.title||'')){ st.intro.prerequis=b; continue; }
+      if(t==='a_retenir' && region==='conclusion'){ st.conclusion.essentiel=fromTakeaways(b); continue; }
+      add(fenceToBlock(t,a,b)); continue;
+    }
+  }
+  if(!st.parts.length) st.parts=[blankPart(1)];
+  return st;
+}
+
+/* ============================================================
+   IMPORT DE DOCUMENTS  (hybride : serveur pandoc / client-side)
+   ============================================================ */
+function currentLesson(){
+  if(!selected || selected.type!=='lesson') return null;
+  const p=(state.parts||[]).find(p=>p.id===selected.partId);
+  return (p && (p.lessons||[]).find(L=>L.id===selected.lessonId)) || null;
+}
+// Convertit un md « générique » (issu de pandoc/mammoth) en blocs atelier.
+function importMdToBlocks(text){
+  const f=parseFront(text); const out=[];
+  tokenizeMd(f.body).forEach(tk=>{
+    if(tk.kind==='h1') out.push({ id:nid(), type:'heading', data:{ text:tk.text } });
+    else if(tk.kind==='h2') out.push({ id:nid(), type:'subheading', data:{ text:tk.text } });
+    else if(tk.kind==='native') nativeToBlocks(tk.raw).forEach(b=>out.push({ id:nid(), ...b }));
+    else if(tk.kind==='fence'){ const fb=fenceToBlock(tk.type,tk.attrs,tk.body); out.push({ id:nid(), ...fb }); }
+  });
+  return out;
+}
+function loadScript(src){ return new Promise((res,rej)=>{
+  if([...document.scripts].some(s=>s.src===src)) return res();
+  const s=document.createElement('script'); s.src=src; s.onload=()=>res(); s.onerror=()=>rej(new Error('Chargement échoué : '+src));
+  document.head.appendChild(s); }); }
+async function docxToMd(file){
+  await loadScript('https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js');
+  await loadScript('https://unpkg.com/turndown@7.2.0/dist/turndown.js');
+  const ab=await file.arrayBuffer();
+  const r=await window.mammoth.convertToHtml({ arrayBuffer:ab });
+  const td=new window.TurndownService({ headingStyle:'atx', bulletListMarker:'-', codeBlockStyle:'fenced' });
+  return td.turndown(r.value||'');
+}
+async function pdfToMd(file){
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const ab=await file.arrayBuffer();
+  const pdf=await window.pdfjsLib.getDocument({ data:ab }).promise; let out='';
+  for(let p=1;p<=pdf.numPages;p++){ const page=await pdf.getPage(p); const tc=await page.getTextContent();
+    tc.items.forEach(it=>{ out+=it.str; if(it.hasEOL) out+='\n'; }); out+='\n\n'; }
+  return out.trim();
+}
+async function pptxToMd(file){
+  await loadScript('https://unpkg.com/jszip@3.10.1/dist/jszip.min.js');
+  const zip=await window.JSZip.loadAsync(await file.arrayBuffer());
+  const names=Object.keys(zip.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a,b)=>(+a.match(/slide(\d+)/)[1])-(+b.match(/slide(\d+)/)[1]));
+  let out='';
+  for(let i=0;i<names.length;i++){ const xml=await zip.files[names[i]].async('string');
+    const txt=[...xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map(m=>m[1]
+      .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim()).filter(Boolean);
+    out+=`## Diapositive ${i+1}\n\n`+txt.map(t=>'- '+t).join('\n')+'\n\n'; }
+  return out.trim();
+}
+// Hybride : tente le serveur local (/api/import — pandoc/LibreOffice/pdf-parse),
+// sinon bascule sur une conversion 100% navigateur (statique / GitHub Pages).
+async function convertDocToMarkdown(file){
+  const ext=((file.name||'').toLowerCase().split('.').pop())||'';
+  if(ext==='md'||ext==='markdown'||ext==='txt') return await file.text();
+  try{
+    const fd=new FormData(); fd.append('file',file);
+    const r=await fetch('/api/import',{ method:'POST', body:fd });
+    if(r.ok){ const j=await r.json(); if(j && typeof j.markdown==='string') return j.markdown; }
+  }catch(_){ /* pas de backend → fallback client */ }
+  if(ext==='docx') return await docxToMd(file);
+  if(ext==='pdf')  return await pdfToMd(file);
+  if(ext==='pptx') return await pptxToMd(file);
+  if(ext==='ppt')  throw new Error('Le format .ppt (PowerPoint ancien) n’est convertible que via le serveur local. Réenregistrez-le en .pptx, ou lancez l’atelier en local (npm start).');
+  throw new Error('Format « .'+ext+' » non pris en charge sans le serveur local.');
+}
+function openImport(){ document.getElementById('importOverlay').classList.add('open'); setImportStatus('');
+  document.getElementById('importPreviewWrap').style.display='none'; document.getElementById('importInsert').disabled=true; }
+function closeImport(){ document.getElementById('importOverlay').classList.remove('open'); }
+function setImportStatus(t,err){ const el=document.getElementById('importStatus'); el.textContent=t||''; el.style.color=err?'var(--err-fg)':'var(--ink-soft)'; }
+function pickImportFile(){ document.getElementById('importInput').click(); }
+async function runImport(file){
+  if(!file) return;
+  setImportStatus('Conversion de « '+file.name+' » en cours…');
+  document.getElementById('importPreviewWrap').style.display='none';
+  document.getElementById('importInsert').disabled=true;
+  try{
+    const mdtext=await convertDocToMarkdown(file);
+    document.getElementById('importPreview').value=mdtext;
+    document.getElementById('importPreviewWrap').style.display='';
+    document.getElementById('importInsert').disabled=false;
+    setImportStatus('Conversion réussie. Relisez le markdown ci-dessous, puis insérez-le.');
+  }catch(e){ setImportStatus(e.message||'Conversion impossible.', true); }
+}
+function confirmImport(){
+  const L=currentLesson();
+  if(!L){ setImportStatus('Sélectionnez d’abord un chapitre dans le panneau de gauche.', true); return; }
+  const text=document.getElementById('importPreview').value||'';
+  const blocks=importMdToBlocks(text);
+  if(!blocks.length){ setImportStatus('Rien à importer.', true); return; }
+  L.blocks=(L.blocks||[]).concat(blocks);
+  closeImport(); render(); markDirty(); toast(blocks.length+' bloc(s) importé(s) dans « '+(L.title||'le chapitre')+' »');
 }
 
 /* ============================================================
