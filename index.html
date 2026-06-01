@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>CNSMDP Learning Lab — Beta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1a1a1a; --ink-soft:#4a4a4a; --muted:#6b7280;
+    --bg:#0f0f10; --panel:#ffffff; --border:#e5e7eb;
+    --accent:#7c3aed; --accent-2:#16a34a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px}
+  .wrap{width:100%;max-width:720px}
+  header{text-align:center;margin-bottom:36px;color:#fff}
+  .eyebrow{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;margin:0 0 10px}
+  h1{font-size:32px;font-weight:700;margin:0 0 8px;color:#fff}
+  .sub{font-size:15px;color:#9ca3af;margin:0}
+  .grid{display:grid;gap:16px}
+  .card{display:block;background:var(--panel);border:1px solid var(--border);border-radius:14px;
+    padding:22px 24px;text-decoration:none;color:inherit;transition:transform .12s ease, box-shadow .12s ease}
+  .card:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.25)}
+  .card h2{font-size:18px;font-weight:600;margin:0 0 6px}
+  .card p{font-size:14px;color:var(--muted);margin:0;line-height:1.55}
+  .tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+    padding:3px 9px;border-radius:999px;margin-bottom:12px}
+  .t-guide{background:#f5f3ff;color:var(--accent)}
+  .t-atelier{background:#f0fdf4;color:var(--accent-2)}
+  footer{text-align:center;margin-top:28px;font-size:12px;color:#6b7280}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="eyebrow">CNSMDP Learning Lab</p>
+      <h1>Outils en beta-test</h1>
+      <p class="sub">Merci de tester ces deux outils et de me faire vos retours.</p>
+    </header>
+    <div class="grid">
+      <a class="card" href="guide-conception.html">
+        <span class="tag t-guide">Guide</span>
+        <h2>Guide de conception →</h2>
+        <p>Le parcours pas-à-pas pour concevoir un module e-learning, jusqu'à la rédaction du cours.</p>
+      </a>
+      <a class="card" href="atelier-redaction.html">
+        <span class="tag t-atelier">Atelier</span>
+        <h2>Atelier de rédaction (experts) →</h2>
+        <p>L'outil de rédaction pour structurer le contenu : blocs, activités, mise en forme.</p>
+      </a>
+    </div>
+    <footer>Version beta — ne pas diffuser hors du groupe de test.</footer>
+  </div>
+</body>
+</html>

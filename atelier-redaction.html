@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier de rédaction — CNSMDP Learning Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#111;--ink-soft:#374151;--ink-faint:#6b7280;--ink-muted:#9ca3af;
+    --bg:#fff;--surface:#fff;--surface-alt:#f5f5f5;--surface-hover:#eee;--surface-sunk:#fafafa;
+    --border:#e5e5e5;--border-strong:#d4d4d4;--border-muted:#ededed;
+    --radius:8px;--radius-lg:12px;--radius-sm:4px;
+    /* Police alignée sur les cours ScormStack (thème = Inter) */
+    --font-display:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+    --font-mono:'DM Mono',ui-monospace,Menlo,Consolas,monospace;
+    /* Échelle typo unique (= tokens.css). Toutes les tailles s'y rapportent. */
+    --text-xs:11px;--text-sm:13px;--text-base:14px;--text-md:15px;
+    --text-lg:18px;--text-xl:22px;--text-2xl:26px;--text-3xl:32px;
+    --tip-fg:#16a34a;--tip-bg:#f0fdf4;
+    --info-fg:#2563eb;--info-bg:#eff6ff;
+    --warn-fg:#ca8a04;--warn-bg:#fefce8;
+    --imp-fg:#7c3aed;--imp-bg:#f5f3ff;
+    --illu-fg:#c2410c;--illu-bg:#fff7ed;
+    --err-fg:#dc2626;--err-bg:#fef2f2;
+    --ok:#16a34a;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:var(--font-ui);font-size:var(--text-base);line-height:1.55;color:var(--ink-soft);background:var(--surface-sunk);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+
+  /* ── Top bar ─────────────────────────────────────────── */
+  header.top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:16px;
+    height:56px;padding:0 22px;background:var(--ink);color:#fafafa;flex:0 0 auto}
+  .wordmark{font-family:var(--font-display);font-weight:600;font-size:var(--text-md);letter-spacing:-.02em}
+  .wordmark em{font-style:italic;font-weight:400;font-size:var(--text-sm);color:#cbd5e1;margin-left:6px}
+  .top .spacer{flex:1}
+  .top .save-state{font-size:var(--text-sm);color:#9ca3af;font-family:var(--font-mono)}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;font-family:var(--font-ui);
+    font-size:var(--text-sm);font-weight:500;border-radius:var(--radius-sm);cursor:pointer;border:1px solid transparent;
+    background:var(--surface);color:var(--ink);border-color:var(--border-strong);transition:all .12s;white-space:nowrap}
+  .btn:hover{background:var(--surface-hover);border-color:var(--ink)}
+  .btn--ghost{background:transparent;color:#e5e7eb;border-color:#374151}
+  .btn--ghost:hover{background:#1f2937;border-color:#6b7280;color:#fff}
+  .btn--primary{background:#fff;color:var(--ink);border-color:#fff;font-weight:600}
+  .btn--primary:hover{background:#e5e7eb}
+  .btn--sm{padding:5px 10px;font-size:var(--text-sm)}
+  .btn--danger{color:var(--err-fg);border-color:transparent;background:transparent;padding:5px 8px}
+  .btn--danger:hover{background:var(--err-bg);border-color:var(--err-bg)}
+
+  /* ── Layout ─────────────────────────────────────────── */
+  .shell{flex:1;display:flex;min-height:0;overflow:hidden}
+  aside.nav{width:300px;flex:0 0 auto;background:var(--surface);border-right:1px solid var(--border);
+    overflow-y:auto;padding:18px 16px 60px}
+  main.work{flex:1;overflow-y:auto;padding:0 0 100px}
+  .work-inner{max-width:720px;margin:0 auto;padding:28px 32px 0}
+
+  /* ── Sidebar outline ───────────────────────────────── */
+  .nav .course-name{font-family:var(--font-display);font-weight:600;font-size:var(--text-lg);color:var(--ink);
+    width:100%;border:none;background:transparent;padding:6px 8px;border-radius:var(--radius-sm)}
+  .nav .course-name:hover{background:var(--surface-alt)}
+  .nav .course-name:focus{outline:2px solid var(--ink);outline-offset:1px}
+  .nav .micro{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-muted);margin:18px 8px 6px;display:block}
+  .node{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border-radius:var(--radius-sm);
+    cursor:pointer;border:none;background:transparent;color:var(--ink-soft);font-size:var(--text-sm);font-family:var(--font-ui)}
+  .node:hover{background:var(--surface-alt)}
+  .node.active,.node.part.active,.node.guide.active{background:var(--ink);color:#fff}
+  .node.active .badge{background:rgba(255,255,255,.18);color:#fff}
+  .node .lbl{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .node.lesson{padding-left:24px;font-size:var(--text-sm)}
+  .node.part{font-weight:600;color:var(--ink)}
+  .badge{font-family:var(--font-mono);font-size:var(--text-xs);padding:1px 7px;border-radius:999px;background:var(--surface-alt);
+    color:var(--ink-faint);flex:0 0 auto}
+  .badge.ok{background:var(--tip-bg);color:var(--tip-fg)}
+  .badge.over{background:var(--warn-bg);color:var(--warn-fg)}
+  .badge.low{background:var(--surface-alt);color:var(--ink-muted)}
+  .add-row{padding:6px 10px}
+  .add-link{font-size:var(--text-sm);color:var(--ink-faint);background:none;border:none;cursor:pointer;padding:4px 0;font-family:var(--font-ui)}
+  .add-link:hover{color:var(--ink);text-decoration:underline}
+  .nav .part-group{margin-bottom:4px}
+
+  /* ── Work panel ────────────────────────────────────── */
+  h1.page{font-family:var(--font-display);font-weight:700;font-size:var(--text-3xl);color:var(--ink);line-height:1.15;letter-spacing:-.02em;margin-bottom:6px}
+  .crumb{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px}
+  h2.sec{font-family:var(--font-display);font-size:var(--text-xl);font-weight:600;color:var(--ink);line-height:1.25;letter-spacing:-.01em;margin:34px 0 8px}
+  .field{margin:16px 0}
+  label.lab{display:block;font-weight:600;color:var(--ink);font-size:var(--text-sm);margin-bottom:5px}
+  .hint{font-size:var(--text-sm);color:var(--ink-faint);margin:2px 0 8px;line-height:1.5}
+  input.txt,textarea.txt,select.txt{width:100%;font-family:var(--font-ui);font-size:var(--text-base);color:var(--ink-soft);
+    background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:9px 11px;line-height:1.5}
+  textarea.txt{resize:vertical;min-height:80px}
+  textarea.big{min-height:150px}
+  input.txt:focus,textarea.txt:focus,select.txt:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(17,17,17,.06)}
+  /* Toolbar de mise en forme — fixe en haut de la zone d'édition */
+  .editbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(6px);
+    border-bottom:1px solid var(--border)}
+  .editbar-inner{max-width:720px;margin:0 auto;padding:7px 32px;display:flex;align-items:center;gap:3px}
+  .fmtbtn{min-width:30px;height:28px;padding:0 9px;border:none;background:transparent;color:var(--ink-soft);font-family:var(--font-ui);font-size:var(--text-base);line-height:1;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .fmtbtn:hover{background:var(--surface-alt);color:var(--ink)}
+  .fmtbtn .sub{font-size:var(--text-xs);vertical-align:-2px;margin-left:1px}
+  .editbar .sep{width:1px;align-self:stretch;margin:3px 4px;background:var(--border)}
+  /* Dictée vocale — état d'enregistrement */
+  .fmtbtn.dictate.rec{background:var(--err-bg);color:var(--err-fg)}
+  .fmtbtn.dictate.rec::after{content:'';width:7px;height:7px;border-radius:50%;background:var(--err-fg);margin-left:5px;animation:dictpulse 1s ease-in-out infinite}
+  @keyframes dictpulse{0%,100%{opacity:1}50%{opacity:.25}}
+  /* Jauge compacte intégrée à la toolbar (temps apprenant, toujours visible) */
+  .bar-gauge{margin-left:auto;display:flex;align-items:center;gap:8px;padding-left:12px;cursor:default}
+  .bar-gauge[hidden]{display:none}
+  .bg-txt{font-family:var(--font-mono);font-size:var(--text-sm);color:var(--ink-soft);white-space:nowrap}
+  .bg-txt b{color:var(--ink);font-weight:600}
+  .bg-bar{width:84px;height:6px;border-radius:4px;background:var(--surface-alt);overflow:hidden;flex:0 0 auto}
+  .bg-fill{display:block;height:100%;width:0;background:var(--ink-faint);border-radius:4px;transition:width .25s,background .25s}
+  .bg-fill.ok{background:var(--tip-fg)} .bg-fill.over{background:var(--warn-fg)}
+  @media (max-width:860px){ .bar-gauge{display:none} }
+  .row{display:flex;gap:10px}.row>*{flex:1}
+  .row.tight{gap:8px}
+
+  /* Tip callout (pedagogical, from guide) */
+  .tip{display:flex;gap:10px;border-left:3px solid var(--tip-fg);background:var(--tip-bg);border-radius:var(--radius-sm);
+    padding:11px 14px;margin:12px 0;font-size:var(--text-sm);color:var(--ink-soft)}
+  .tip.info{border-color:var(--info-fg);background:var(--info-bg)}
+  .tip.warn{border-color:var(--warn-fg);background:var(--warn-bg)}
+  .tip.imp{border-color:var(--imp-fg);background:var(--imp-bg)}
+  .tip .ic{flex:0 0 auto;font-weight:700}
+  .tip b{color:var(--ink)}
+
+  /* Word gauge */
+  .gauge{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:var(--surface);margin:14px 0}
+  .gauge .top-line{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+  .gauge .count{font-family:var(--font-mono);font-size:var(--text-xl);color:var(--ink);font-weight:500}
+  .gauge .count small{font-size:var(--text-sm);color:var(--ink-faint)}
+  .gauge .target{font-size:var(--text-sm);color:var(--ink-faint)}
+  .bar{height:8px;background:var(--surface-alt);border-radius:999px;overflow:hidden;position:relative}
+  .bar .fill{height:100%;background:var(--ink-muted);border-radius:999px;transition:width .25s,background .25s}
+  .bar .fill.ok{background:var(--ok)} .bar .fill.over{background:var(--warn-fg)}
+  .gauge .verdict{font-size:var(--text-sm);margin-top:8px;color:var(--ink-faint)}
+  .gauge .verdict.ok{color:var(--tip-fg)} .gauge .verdict.over{color:var(--warn-fg)}
+
+  /* Repeatable item cards (sections, media, activities) */
+  .card{border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:12px 0;background:var(--surface);position:relative}
+  .card .card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .card .ctag{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint)}
+  .add-block{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+  .add-block .btn{background:var(--surface-alt);border-color:var(--border)}
+  .add-block .btn:hover{background:var(--surface-hover);border-color:var(--ink)}
+
+  /* QCM options */
+  .opt-row{display:flex;gap:8px;align-items:flex-start;margin:8px 0;padding:10px;border:1px solid var(--border-muted);border-radius:var(--radius-sm);background:var(--surface-sunk)}
+  .opt-row .correct-wrap{flex:0 0 auto;padding-top:8px;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .opt-row .correct-wrap small{font-size:var(--text-xs);color:var(--ink-muted)}
+  .opt-row .opt-fields{flex:1}
+  .opt-row.is-correct{border-color:var(--ok);background:var(--tip-bg)}
+  input[type=checkbox],input[type=radio]{width:17px;height:17px;accent-color:var(--ink);cursor:pointer}
+
+  .timecode-warn{font-size:var(--text-sm);color:var(--warn-fg);margin-top:6px;display:none}
+  .timecode-warn.show{display:block}
+  .chk-line{display:flex;align-items:center;gap:8px;font-size:var(--text-sm);margin-top:8px;color:var(--ink-soft)}
+  .empty-note{color:var(--ink-muted);font-size:var(--text-sm);font-style:italic;padding:8px 0}
+
+  /* ── Éditeur de blocs unifié ──────────────────────── */
+  .card.blk{padding:14px 16px}
+  .blk-ic{display:inline-block;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--ink-faint);margin-right:4px}
+  .blk-actions{display:flex;align-items:center;gap:4px}
+  .ico-btn{width:26px;height:26px;border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);
+    border-radius:var(--radius-sm);cursor:pointer;font-size:var(--text-xs);line-height:1;display:flex;align-items:center;justify-content:center}
+  .ico-btn:hover:not(:disabled){border-color:var(--ink);color:var(--ink)}
+  .ico-btn:disabled{opacity:.3;cursor:default}
+  .qcard{border:1px solid var(--border-muted);border-radius:var(--radius-sm);padding:12px 14px;margin:10px 0;background:var(--surface-sunk)}
+
+  /* Palette d'insertion — menu déroulant ancré au bouton */
+  .palette-wrap{position:relative;margin:16px 0}
+  .add-blk-btn{width:100%;justify-content:center;border-style:dashed;border-color:var(--border-strong);
+    background:var(--surface);color:var(--ink-soft);font-weight:600}
+  .add-blk-btn:hover{border-color:var(--ink);color:var(--ink)}
+  .add-blk-btn.is-open{border-style:solid;border-color:var(--ink);color:var(--ink)}
+  .palette[hidden]{display:none}
+  .palette{position:absolute;top:calc(100% + 6px);left:0;width:300px;max-height:382px;display:flex;flex-direction:column;
+    z-index:70;background:#fff;border:1px solid var(--border-strong);border-radius:var(--radius);
+    box-shadow:0 12px 34px rgba(0,0,0,.16);overflow:hidden}
+  .pal-search{flex:0 0 auto;border:none;border-bottom:1px solid var(--border);background:var(--surface);
+    padding:10px 12px;font-family:var(--font-ui);font-size:var(--text-sm);color:var(--ink);outline:none}
+  .pal-search::placeholder{color:var(--ink-faint)}
+  .pal-list{flex:1;overflow-y:auto;padding:5px}
+  .pal-group[hidden]{display:none}
+  .pal-group{margin:4px 0 6px}
+  .pal-h{display:flex;align-items:center;gap:6px;font-size:var(--text-xs);font-weight:600;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--ink-faint);padding:5px 8px 3px}
+  .pal-dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .pal-btn[hidden]{display:none}
+  .pal-btn{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:7px 9px;border:none;
+    background:transparent;color:var(--ink-soft);border-radius:var(--radius-sm);cursor:pointer;font-family:var(--font-ui);font-size:var(--text-sm)}
+  .pal-btn:hover{background:var(--surface-alt);color:var(--ink)}
+  .pal-ic{flex:0 0 auto;width:22px;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--ink-faint);text-align:center}
+  .pal-empty{padding:18px 12px;text-align:center;font-size:var(--text-sm);color:var(--ink-muted);font-style:italic}
+  .pal-empty[hidden]{display:none}
+
+  /* Aperçu : colonnes & tableau */
+  .pv-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:12px 0}
+  .pv-table{width:100%;border-collapse:collapse;margin:12px 0;font-size:var(--text-sm)}
+  .pv-table th,.pv-table td{border:1px solid var(--border);padding:7px 10px;text-align:left}
+  .pv-table th{background:var(--surface-alt);font-weight:600}
+
+  /* Guide de conception — lien vers la page autonome guide-conception.html */
+  .nav .guide-link{text-decoration:none;justify-content:space-between}
+  .nav .guide-link .gl-ext{color:var(--ink-muted);font-size:var(--text-sm)}
+  .nav .guide-link:hover{background:var(--surface-alt)}
+  .nav .guide-link:hover .gl-ext{color:var(--ink-soft)}
+  .nav .aide-sep{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+  .crumb .gk{color:var(--imp-fg)}
+  .guide-prose{font-size:var(--text-base);color:var(--ink-soft);max-width:680px}
+  .guide-prose p{margin:0 0 13px;line-height:1.65}
+  .guide-prose ul{margin:8px 0 15px;padding-left:20px}
+  .guide-prose li{margin:5px 0;line-height:1.55}
+  .guide-prose h2.sec{margin:28px 0 6px}
+  .guide-prose strong{color:var(--ink)}
+  .guide-lead{font-size:var(--text-lg);line-height:1.6;color:var(--ink-soft);margin:0 0 18px}
+  .deliv{counter-reset:dv;margin:14px 0}
+  .deliv .d{position:relative;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px 14px 52px;margin:10px 0;background:var(--surface)}
+  .deliv .d::before{counter-increment:dv;content:counter(dv);position:absolute;left:14px;top:14px;width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font-family:var(--font-mono);font-size:var(--text-sm);display:flex;align-items:center;justify-content:center}
+  .deliv .d b{display:block;color:var(--ink);font-size:var(--text-base);margin-bottom:3px}
+  .deliv .d p{margin:0;font-size:var(--text-sm);line-height:1.55}
+  .guide-nav{display:flex;justify-content:space-between;gap:10px;margin:32px 0 4px;border-top:1px solid var(--border);padding-top:16px}
+  .guide-cta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--imp-bg);border:1px solid var(--imp-fg);border-radius:var(--radius);padding:16px 18px;margin:24px 0 4px}
+  .guide-cta b{color:var(--ink)}
+
+  /* Estimateur de volume (calculateur intégré) */
+  .calc{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:16px;margin:16px 0}
+  .calc-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:9px}
+  .calc-lab{font-weight:600;color:var(--ink);font-size:var(--text-sm)}
+  .calc-out{font-family:var(--font-mono);font-size:var(--text-xl);color:var(--ink);font-weight:500;white-space:nowrap}
+  .calc input[type=range]{width:100%;accent-color:var(--ink);cursor:pointer}
+  .calc-scale{display:flex;justify-content:space-between;margin-top:5px;color:var(--ink-muted);font-size:var(--text-xs);font-family:var(--font-mono)}
+  .calc-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0 0}
+  .calc-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:11px 13px;background:var(--surface-sunk)}
+  .calc-card .k{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted)}
+  .calc-card .v{font-size:var(--text-lg);font-weight:600;color:var(--ink);margin:4px 0 3px;line-height:1.2}
+  .calc-card .n{font-size:var(--text-xs);color:var(--ink-faint);line-height:1.45}
+  .calc-fb{border-left:3px solid var(--ink);background:var(--surface-alt);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:11px 14px;margin-top:14px;font-size:var(--text-sm);line-height:1.55;color:var(--ink-soft)}
+  .calc-fb b{color:var(--ink)}
+  @media(max-width:680px){.calc-cards{grid-template-columns:1fr}}
+
+  /* Exemples de cours produits (galerie) */
+  .ex-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:18px 0}
+  .ex-card{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);display:flex;flex-direction:column}
+  .ex-thumb{height:116px;display:flex;align-items:center;justify-content:center;background:var(--ink);color:#fff;font-size:30px;overflow:hidden}
+  .ex-thumb img{width:100%;height:100%;object-fit:cover;object-position:top center;display:block}
+  .ex-b{padding:14px 16px;flex:1;display:flex;flex-direction:column;gap:6px}
+  .ex-k{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted)}
+  .ex-t{font-weight:600;color:var(--ink);font-size:var(--text-md);line-height:1.25}
+  .ex-a{font-size:var(--text-sm);color:var(--ink-faint)}
+  .ex-d{font-size:var(--text-sm);color:var(--ink-faint);line-height:1.5;flex:1;margin-top:2px}
+  .ex-link{font-size:var(--text-sm);font-weight:600;color:var(--ink);text-decoration:none;border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:7px 12px;align-self:flex-start;margin-top:4px}
+  .ex-link:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+  @media(max-width:680px){.ex-grid{grid-template-columns:1fr}}
+  .summary-pill{display:inline-flex;align-items:center;gap:6px;font-size:var(--text-sm);background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:3px 10px;margin:3px 4px 3px 0}
+
+  /* Export modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;display:none;align-items:center;justify-content:center;padding:24px}
+  .overlay.show{display:flex}
+  .modal{background:var(--surface);border-radius:var(--radius-lg);max-width:760px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3)}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border)}
+  .modal-head h3{font-size:var(--text-lg);color:var(--ink);font-weight:600}
+  .modal-body{padding:18px 22px;overflow:auto}
+  .modal pre{background:#111;color:#f5f5f5;border-radius:var(--radius);padding:16px;font-family:var(--font-mono);font-size:var(--text-sm);line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  .modal-foot{padding:16px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+  .x{background:none;border:none;font-size:var(--text-xl);cursor:pointer;color:var(--ink-faint);line-height:1}
+  .x:hover{color:var(--ink)}
+
+  /* ---- Aperçu (vue apprenant·e) ---- */
+  .pv-overlay{padding:0;background:rgba(0,0,0,.55)}
+  .pv-modal{background:var(--surface-sunk);width:100%;max-width:100%;height:100vh;max-height:100vh;border-radius:0;display:flex;flex-direction:column;box-shadow:none}
+  .pv-bar{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;height:54px;padding:0 22px;background:var(--ink);color:#fafafa}
+  .pv-bar-title{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.14em;text-transform:uppercase;color:#cbd5e1}
+  .pv-bar .x{color:#9ca3af}
+  .pv-bar .x:hover{color:#fff}
+  .pv-scroll{flex:1 1 auto;overflow:auto;padding:40px 20px 120px}
+  .pv-doc{background:#fff;max-width:720px;margin:0 auto;border:1px solid var(--border);border-radius:var(--radius-lg);padding:44px 48px;box-shadow:0 16px 48px rgba(0,0,0,.12)}
+  .pv-doc h1{font-family:var(--font-display);font-weight:600;font-size:var(--text-2xl);line-height:1.15;color:var(--ink);letter-spacing:-.02em;margin:0 0 6px}
+  .pv-meta{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.04em;color:var(--ink-muted);margin-bottom:8px}
+  .pv-lead{font-size:var(--text-md);color:var(--ink-soft);margin:14px 0}
+  .pv-part{margin:48px 0 0;padding-top:26px;border-top:2px solid var(--ink)}
+  .pv-part-k{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-muted)}
+  .pv-part-t{font-family:var(--font-display);font-weight:600;font-size:var(--text-xl);color:var(--ink);margin:4px 0 0}
+  .pv-lesson{margin:34px 0 0}
+  .pv-lesson-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .pv-lesson-t{font-family:var(--font-display);font-weight:600;font-size:var(--text-lg);color:var(--ink)}
+  .pv-chip{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);background:var(--surface-alt);border-radius:999px;padding:3px 10px}
+  .pv-h3{font-size:var(--text-md);font-weight:600;color:var(--ink);margin:22px 0 6px}
+  .pv-body{font-size:var(--text-md);line-height:1.65;color:var(--ink-soft)}
+  .pv-body p{margin:0 0 12px}
+  .pv-body ul{margin:0 0 12px;padding-left:20px}
+  .pv-obj{background:var(--surface-alt);border-radius:var(--radius);padding:14px 18px;margin:14px 0}
+  .pv-obj .pv-obj-t{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
+  .pv-obj ul{margin:0;padding-left:18px}
+  .pv-obj li{margin:2px 0}
+  .pv-callout{border-left:3px solid var(--border-strong);background:var(--surface-alt);border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:16px 0}
+  .pv-callout .pv-c-t{font-weight:600;color:var(--ink);font-size:var(--text-sm);margin-bottom:5px}
+  .pv-callout.q{border-left-color:#7c3aed;background:#f5f3ff}
+  .pv-callout.note{border-left-color:#0ea5e9;background:#f0f9ff}
+  .pv-callout.info{border-left-color:#0ea5e9;background:#f0f9ff}
+  .pv-media{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:14px 0;background:#fff}
+  .pv-media-ic{flex:0 0 auto;width:34px;height:34px;border-radius:8px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .pv-media-b{flex:1 1 auto;min-width:0}
+  .pv-media-k{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted)}
+  .pv-media-t{font-weight:600;color:var(--ink);font-size:var(--text-base);margin:2px 0}
+  .pv-media-m{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--ink-faint)}
+  .pv-media a{color:#0369a1;word-break:break-all}
+  .pv-retenir{border:1px solid var(--ink);border-radius:var(--radius);padding:16px 18px;margin:18px 0}
+  .pv-retenir .pv-c-t{font-family:var(--font-mono);font-size:var(--text-xs);letter-spacing:.14em;text-transform:uppercase;color:var(--ink);margin-bottom:7px}
+  .pv-retenir ul{margin:0;padding-left:18px}
+  .pv-qcm{border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin:18px 0;background:#fff}
+  .pv-q{font-weight:600;color:var(--ink);font-size:var(--text-md);margin-bottom:12px}
+  .pv-choice{display:block;width:100%;text-align:left;border:1px solid var(--border-strong);background:var(--surface);border-radius:var(--radius-sm);padding:11px 14px;margin:0 0 8px;font:inherit;font-size:var(--text-base);color:var(--ink-soft);cursor:pointer;transition:all .12s}
+  .pv-choice:hover{border-color:var(--ink)}
+  .pv-choice.correct{border-color:#16a34a;background:#f0fdf4;color:#166534}
+  .pv-choice.wrong{border-color:#dc2626;background:#fef2f2;color:#991b1b}
+  .pv-fb{display:none;font-size:var(--text-sm);color:var(--ink-faint);margin:-2px 0 10px;padding-left:14px;border-left:2px solid var(--border-strong)}
+  .pv-fb.show{display:block}
+  .pv-global{display:none;margin-top:10px;padding:10px 14px;background:var(--surface-alt);border-radius:var(--radius-sm);font-size:var(--text-sm);color:var(--ink-soft)}
+  .pv-global.show{display:block}
+  .pv-empty{text-align:center;color:var(--ink-muted);font-size:var(--text-base);padding:60px 0}
+  @media (max-width:680px){ .pv-doc{padding:28px 22px} }
+
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;
+    padding:11px 20px;border-radius:999px;font-size:var(--text-sm);z-index:60;opacity:0;transition:all .25s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media (max-width:860px){
+    aside.nav{position:fixed;left:0;top:56px;bottom:0;z-index:25;transform:translateX(-100%);transition:transform .2s;box-shadow:0 0 40px rgba(0,0,0,.15)}
+    aside.nav.open{transform:none}
+    .work-inner{padding:0 18px}
+    .menu-btn{display:inline-flex!important}
+  }
+  .menu-btn{display:none}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <button class="btn btn--ghost btn--sm menu-btn" onclick="document.querySelector('aside.nav').classList.toggle('open')">☰</button>
+  <span class="wordmark">CNSMDP <em>Atelier de rédaction</em></span>
+  <span class="spacer"></span>
+  <span class="save-state" id="saveState">—</span>
+  <button class="btn btn--ghost btn--sm" onclick="loadProject()">Charger</button>
+  <button class="btn btn--ghost btn--sm" onclick="saveProject()">Enregistrer</button>
+  <button class="btn btn--ghost btn--sm" onclick="openPreview()">Aperçu</button>
+  <button class="btn btn--primary btn--sm" onclick="openExport()">Exporter pour le CNSMDP</button>
+</header>
+
+<div class="shell">
+  <aside class="nav" id="sidebar"></aside>
+  <main class="work">
+    <div class="editbar" id="editbar"></div>
+    <div class="work-inner" id="work"></div>
+  </main>
+</div>
+
+<div class="overlay" id="exportOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Votre cours, prêt à envoyer</h3>
+      <button class="x" onclick="closeExport()">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="margin-top:0">Voici votre travail transformé au format attendu par l'équipe du CNSMDP.
+      Cliquez sur <b>Télécharger le fichier</b> et envoyez-le à votre interlocuteur·rice. Tout y est : votre contenu,
+      vos ressources avec leurs références, vos extraits audio minutés et vos idées d'évaluation.</p>
+      <pre id="exportPreview"></pre>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="copyExport()">Copier</button>
+      <button class="btn btn--primary" onclick="downloadExport()">Télécharger le fichier</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay pv-overlay" id="previewOverlay">
+  <div class="pv-modal">
+    <div class="pv-bar">
+      <span class="pv-bar-title">Aperçu — vue approximative côté apprenant·e</span>
+      <button class="x" onclick="closePreview()">×</button>
+    </div>
+    <div class="pv-scroll" id="previewBody"></div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".json,.md" style="display:none">
+<div class="toast" id="toast"></div>
+
+<!-- Source unique des blocs (métadonnées UI partagées avec le learning editor).
+     UMD → expose window.BlockCatalog (BLOCKS, INTENTS, EXPERT_IDS…). -->
+<script>
+/* inline ../lib/block-catalog.js */
+/* ============================================================
+   block-catalog.js
+   ------------------------------------------------------------
+   Single source of truth for block UI metadata (label, icon,
+   description, intent grouping). Loaded by:
+     - blocks.jsx       → drives the slash menu, block library, IA
+                          context-aware labels.
+     - atelier-activites.html → reference for label/icon coherence
+                          on activity types that exist in both UIs.
+     - block-studio.html → reference grammar/schema browsing.
+
+   IMPORTANT — this file ONLY contains UI/display metadata.
+   The canonical MD↔ScormStack mapping lives in
+   bridge_md_scormstack.json. The HTML rendering lives in
+   /lib/ir-to-html.js (server) and /lib/block-render-browser.js
+   (client). Edit display strings here, mappings there.
+   ============================================================ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) {
+    module.exports = factory();
+  } else {
+    root.BlockCatalog = factory();
+  }
+}(typeof self !== 'undefined' ? self : this, function () {
+
+  // ── Pedagogical intents (6 families) ───────────────────────
+  // Color tokens are kept here because they're tied to the
+  // catalog: each intent is rendered with its own accent in the
+  // slash menu + block library.
+  const INTENTS = {
+    hook:      { label: 'Hook',     subtitle: 'Capture attention',        color: '#EC4899' },
+    present:   { label: 'Present',  subtitle: 'Transmit knowledge',       color: '#3B82F6' },
+    practise:  { label: 'Practise', subtitle: 'Get learners doing',       color: '#F59E0B' },
+    memorise:  { label: 'Memorise', subtitle: 'Anchor over time',         color: '#8B5CF6' },
+    assess:    { label: 'Assess',   subtitle: 'Measure learning',         color: '#22C55E' },
+    structure: { label: 'Structure',subtitle: 'Plain text and layout',    color: '#6b7280' },
+  };
+
+  // ── Block catalog (display metadata only) ──────────────────
+  const BLOCKS = [
+    // ── STRUCTURE ─────────────────────────────────────────────
+    { id: 'paragraph',    intent: 'structure', label: 'Paragraph',         desc: 'A block of body text.',                            icon: 'pen',         mdType: 'text:paragraph' },
+    { id: 'heading',      intent: 'structure', label: 'Heading',           desc: 'Section title (H1 — opens a new slide).',          icon: 'h1',          mdType: 'text:heading',  example: '# Section title' },
+    { id: 'subheading',   intent: 'structure', label: 'Subheading',        desc: 'Sub-section title (H2 — stays on the slide).',     icon: 'h2',          mdType: 'text:heading',  example: '## Subsection title' },
+    { id: 'bullet_list',  intent: 'structure', label: 'Bullet list',       desc: 'Unordered list.',                                  icon: 'list',        mdType: 'list:bullet' },
+    { id: 'numbered_list',intent: 'structure', label: 'Numbered list',     desc: 'Ordered, ranked or sequential.',                   icon: 'listOrdered', mdType: 'list:numbered' },
+    { id: 'table',        intent: 'structure', label: 'Table',             desc: 'Rows and columns of data.',                        icon: 'blocks',      mdType: 'table' },
+    { id: 'columns',      intent: 'structure', label: 'Two columns',       desc: 'Side-by-side content.',                            icon: 'split',       mdType: 'columns' },
+    { id: 'separator',    intent: 'structure', label: 'Separator',         desc: 'Horizontal divider between ideas.',                icon: 'minus',       mdType: 'separator' },
+    { id: 'separator_transition', intent: 'structure', label: 'Transition slide', desc: 'Visual break between sections.',           icon: 'chevRight',   mdType: 'template:separator-transition' },
+    { id: 'navigation_button', intent: 'structure', label: 'Navigation button', desc: 'Continue / Next-step CTA.',                  icon: 'chevRight',   mdType: 'navigation_button' },
+    { id: 'intro_chapitre',intent: 'structure', label: 'Chapter intro',    desc: 'Opens a new chapter.',                             icon: 'book',        mdType: 'intro_chapitre' },
+    { id: 'fin_chapitre', intent: 'structure', label: 'Chapter end',       desc: 'Closes a chapter.',                                icon: 'flag',        mdType: 'fin_chapitre' },
+    { id: 'label_primary',intent: 'structure', label: 'Primary label',     desc: 'Uppercase tracked label / kicker.',                icon: 'minus',       mdType: 'template:label-primary-uppercase' },
+
+    // ── HOOK ──────────────────────────────────────────────────
+    { id: 'slide_intro',  intent: 'hook',      label: 'Lesson intro',      desc: 'Open the lesson with a hook.',                     icon: 'plane',       mdType: 'slide_intro' },
+    { id: 'plan',         intent: 'hook',      label: 'Plan',              desc: 'Course agenda / table of contents (numbered).',    icon: 'listTree',    mdType: 'plan' },
+    { id: 'slide_break',  intent: 'structure', label: 'New slide',         desc: 'Forces a slide break at this point (no rendering).', icon: 'split',     mdType: 'slide_break' },
+    { id: 'citation',     intent: 'hook',      label: 'Quotation',         desc: 'A pull-quote from a source.',                      icon: 'quote',       mdType: 'citation' },
+    { id: 'biographie',   intent: 'hook',      label: 'Biography',         desc: 'Portrait of a person or work.',                    icon: 'book',        mdType: 'biographie' },
+    { id: 'biography_card',intent:'hook',      label: 'Biography card',    desc: 'Compact biography card.',                          icon: 'users',       mdType: 'template:biography-card' },
+
+    // ── PRESENT ───────────────────────────────────────────────
+    { id: 'callout',      intent: 'present',   label: 'Callout',           desc: 'Note, tip, warning, definition…',                  icon: 'info',        mdType: 'callout' },
+    { id: 'objectifs',    intent: 'present',   label: 'Objectives',        desc: 'Learning goals as a list.',                        icon: 'target',      mdType: 'objectifs' },
+    { id: 'video_expert', intent: 'present',   label: 'Expert video',      desc: 'Talking-head video from a teacher.',               icon: 'video',       mdType: 'video_expert' },
+    { id: 'video',        intent: 'present',   label: 'Video',             desc: 'Generic video player.',                            icon: 'video',       mdType: 'video' },
+    { id: 'audio',        intent: 'present',   label: 'Audio',             desc: 'Audio player with transcript.',                    icon: 'video',       mdType: 'audio' },
+    { id: 'image',        intent: 'present',   label: 'Image',             desc: 'Illustration, score, photograph.',                 icon: 'image',       mdType: 'illustration_validee', example: ':::illustration_validee {caption="…" alt="…"}\n![alt](images/your-image.png)\n:::' },
+    { id: 'illustration_brief', intent: 'present', label: 'Illustration brief', desc: 'Spec for an illustration to be created (briefs an illustrator).', icon: 'pen',     mdType: 'illustration_brief' },
+    { id: 'motion_design', intent: 'present',   label: 'Motion design',     desc: 'Motion brief + repo URL (for the motion designer).',  icon: 'play',       mdType: 'motion_design' },
+    { id: 'image_full',   intent: 'present',   label: 'Full-width image',  desc: 'Edge-to-edge banner image.',                       icon: 'image',       mdType: 'template:image-full-width' },
+    { id: 'image_with_text', intent: 'present',label: 'Image + text',      desc: 'Image with caption text beside it.',               icon: 'image',       mdType: 'template:image-with-text' },
+    { id: 'image_carousel', intent: 'present', label: 'Image carousel',    desc: 'Slideshow of images (drag-drop, captions, live preview).',  icon: 'image',       mdType: 'image_carousel' },
+    { id: 'pdf',          intent: 'present',   label: 'PDF',               desc: 'Embed a PDF document.',                            icon: 'file',        mdType: 'pdf' },
+    { id: 'embed',        intent: 'present',   label: 'Embed / iframe',    desc: 'External widget (YouTube, etc.).',                 icon: 'link',        mdType: 'embed' },
+    { id: 'interactive_module', intent: 'present', label: 'Interactive module', desc: 'Custom HTML/SCORM module hosted as iframe.',  icon: 'package',     mdType: 'interactive_module' },
+    { id: 'module_sur_mesure', intent: 'present', label: 'Module sur-mesure', desc: 'Brief pour un module interactif à produire (interprété :::interactive_module côté IP).', icon: 'package', mdType: 'interactive_module' },
+    { id: 'accordion',    intent: 'present',   label: 'Accordion',         desc: 'Collapsible sections.',                            icon: 'layers',      mdType: 'accordion' },
+    { id: 'tabs',         intent: 'present',   label: 'Tabs',              desc: 'Tabbed content panes.',                            icon: 'blocks',      mdType: 'tabs' },
+    { id: 'flow',         intent: 'present',   label: 'Flow / steps',      desc: 'Sequential numbered steps.',                       icon: 'listTree',    mdType: 'flow' },
+
+    // ── PRACTISE ──────────────────────────────────────────────
+    { id: 'reflection',   intent: 'practise',  label: 'Reflection',        desc: 'Open prompt for the learner.',                     icon: 'light',       mdType: 'reflection' },
+    { id: 'open_response',intent: 'practise',  label: 'Open response',     desc: 'Free-text learner answer.',                        icon: 'pen',         mdType: 'open_response' },
+    { id: 'checklist',    intent: 'practise',  label: 'Checklist',         desc: 'Items to tick off.',                               icon: 'check',       mdType: 'checklist' },
+    { id: 'web_simulation',intent:'practise',  label: 'Web simulation',    desc: 'Interactive web sandbox.',                         icon: 'package',     mdType: 'web_simulation' },
+    { id: 'interactive_image',intent:'practise',label:'Interactive image', desc:'Image with hot-spots.',                            icon: 'image',       mdType: 'interactive_image' },
+    { id: 'click_on_image',intent:'practise',  label: 'Click on image',    desc: 'Identify zones on an image.',                      icon: 'image',       mdType: 'click_on_image' },
+    { id: 'reactions',    intent: 'practise',  label: 'Reactions',         desc: 'Emoji / sentiment poll.',                          icon: 'sparkles',    mdType: 'reactions' },
+    { id: 'conceptslider',intent: 'practise',  label: 'Concept slider',    desc: 'Slide between two opposing ideas.',                icon: 'split',       mdType: 'concept_slider' },
+    { id: 'listening',    intent: 'practise',  label: 'Listening exercise',desc: 'Identify what is heard in an audio clip.',         icon: 'video',       mdType: 'listening' },
+
+    // ── MEMORISE ──────────────────────────────────────────────
+    { id: 'a_retenir',    intent: 'memorise',  label: 'Key takeaway',      desc: 'A point to remember.',                             icon: 'flag',        mdType: 'a_retenir' },
+    { id: 'flashcards',   intent: 'memorise',  label: 'Flashcards',        desc: 'Flip cards for memorisation.',                     icon: 'layers',      mdType: 'flashcards' },
+    { id: 'resources',    intent: 'memorise',  label: 'Resource link',     desc: 'A single linked resource.',                        icon: 'link',        mdType: 'resources' },
+    { id: 'resources_grid',intent:'memorise',  label: 'Resources grid',    desc: 'Grid of external links / files.',                  icon: 'package',     mdType: 'resources_grid' },
+    { id: 'time_requirements', intent:'memorise', label: 'Time required',  desc: 'Estimated study time.',                            icon: 'clock',       mdType: 'time_requirements' },
+
+    // ── ASSESS ────────────────────────────────────────────────
+    { id: 'qcm',          intent: 'assess',    label: 'Multiple choice',   desc: 'One-or-many-correct question.',                    icon: 'help',        mdType: 'qcm' },
+    { id: 'qcu',          intent: 'assess',    label: 'Single choice',     desc: 'Exactly one correct answer.',                      icon: 'help',        mdType: 'qcu' },
+    { id: 'truefalse',    intent: 'assess',    label: 'True / false',      desc: 'Binary statement evaluation.',                     icon: 'check',       mdType: 'truefalse' },
+    { id: 'fill_in_blank',intent: 'assess',    label: 'Fill in the blank', desc: 'Sentence with missing word.',                      icon: 'pen',         mdType: 'fill_in_blank' },
+    { id: 'matching',     intent: 'assess',    label: 'Matching',          desc: 'Pair items from two columns.',                     icon: 'listTree',    mdType: 'matching' },
+    { id: 'categorization',intent:'assess',    label: 'Categorisation',    desc: 'Sort items into buckets.',                         icon: 'blocks',      mdType: 'categorization' },
+    { id: 'assessment',   intent: 'assess',    label: 'Assessment',        desc: 'Multi-question quiz block.',                       icon: 'help',        mdType: 'assessment' },
+    { id: 'quiz_final',   intent: 'assess',    label: 'Final quiz',        desc: 'End-of-chapter quiz.',                             icon: 'help',        mdType: 'quiz_final' },
+    { id: 'success_meter',intent: 'assess',    label: 'Success meter',     desc: 'Show learner progress vs. goal.',                  icon: 'target',      mdType: 'success_meter' },
+  ];
+
+  // ── Expert mode — palette restreinte (Atelier de rédaction) ─
+  // Liste blanche des blocs offerts à l'INSERTION quand l'éditeur tourne
+  // en mode expert (redaction.html / window.IS_EXPERT). Choisie avec
+  // Christophe. N'affecte QUE les surfaces d'insertion (slash menu, palette,
+  // bibliothèque) — la résolution/affichage des blocs déjà posés utilise
+  // toujours le catalogue complet (byId/findBlockMeta), pour ne jamais
+  // casser un contenu existant. Ordre d'affichage = ordre du catalogue.
+  const EXPERT_IDS = [
+    'paragraph', 'heading', 'subheading', 'bullet_list', 'numbered_list',
+    'table', 'columns', 'plan', 'citation', 'callout', 'objectifs',
+    'video_expert', 'video', 'audio', 'image', 'illustration_brief',
+    'motion_design', 'module_sur_mesure', 'image_with_text', 'pdf', 'reflection', 'listening',
+    'a_retenir', 'resources', 'qcm', 'qcu', 'truefalse', 'assessment',
+    'quiz_final',
+  ];
+
+  // True quand l'éditeur est en mode expert. Lu paresseusement à chaque appel
+  // (window.IS_EXPERT est défini par app-shell.jsx, chargé APRÈS ce fichier).
+  const isExpertMode = () => {
+    try { return typeof window !== 'undefined' && (window.IS_EXPERT === true || window.__EXPERT__ === true); }
+    catch (e) { return false; }
+  };
+
+  // Catalogue à proposer à l'insertion : restreint en mode expert (en
+  // préservant l'ordre du catalogue), complet sinon.
+  function insertableBlocks() {
+    if (!isExpertMode()) return BLOCKS;
+    const keep = new Set(EXPERT_IDS);
+    return BLOCKS.filter(b => keep.has(b.id));
+  }
+
+  // ── Callout sub-types ──────────────────────────────────────
+  // To add a new type: register it here, add its id to the `type` enum
+  // in lib/bridge-schemas.js → 'callout', and declare its color tokens
+  // in tokens.css (--callout-<id>-fg/bg).
+  const CALLOUTS = [
+    { id: 'note',     label: 'Note',           color: 'var(--callout-note-fg)',     bg: 'var(--callout-note-bg)' },
+    { id: 'tip',      label: 'Tip',            color: 'var(--callout-tip-fg)',      bg: 'var(--callout-tip-bg)' },
+    { id: 'warn',     label: 'Warning',        color: 'var(--callout-warn-fg)',     bg: 'var(--callout-warn-bg)' },
+    { id: 'def',      label: 'Definition',     color: 'var(--callout-def-fg)',      bg: 'var(--callout-def-bg)' },
+    { id: 'example',  label: 'Example',        color: 'var(--callout-ex-fg)',       bg: 'var(--callout-ex-bg)' },
+    { id: 'important',label: 'Important',      color: 'var(--cnsm-red)',            bg: 'var(--callout-important-bg)' },
+    // CNSMDP — flag pour signaler à l'équipe production qu'une
+    // illustration doit être créée à cet emplacement. Couleur orange.
+    { id: 'illu',     label: 'Besoin illustration', color: 'var(--callout-illu-fg)', bg: 'var(--callout-illu-bg)' },
+  ];
+
+  // ── Helpers ────────────────────────────────────────────────
+  const byId      = (id)     => BLOCKS.find(b => b.id === id) || null;
+  const byIntent  = (intent) => BLOCKS.filter(b => b.intent === intent);
+  const labelOf   = (id)     => byId(id)?.label || id;
+  const iconOf    = (id)     => byId(id)?.icon || 'pen';
+  const descOf    = (id)     => byId(id)?.desc || '';
+
+  // Map bridge source_family → catalog intent grouping (kept in sync with
+  // block-studio's local copy of this lookup table). Targets MUST be keys
+  // of INTENTS above — otherwise BlockLibraryModal crashes (no color/label).
+  const FAMILY_TO_INTENT = {
+    structure:  'structure',
+    contenu:    'present',
+    media:      'present',
+    interaction:'practise',
+    evaluation: 'assess',
+    navigation: 'structure',
+    suivi:      'structure',
+  };
+
+  /**
+   * Merge bridge mappings into BLOCKS so blocks created in Block Designer
+   * are immediately visible in the editor's slash menu / catalog. Mutates
+   * BLOCKS in place (consumers hold a live reference to it).
+   *
+   * Returns a counter that the caller can bump in React state to force a
+   * re-render of memoised filters (e.g. useMemo([..., catalogVersion])).
+   */
+  let catalogVersion = 0;
+  function syncFromBridge(mappings) {
+    if (!Array.isArray(mappings)) return catalogVersion;
+    const knownIds = new Set(BLOCKS.map(b => b.id));
+    // Also accept id matches via mdType (legacy entries used full ss path).
+    const knownMd  = new Set(BLOCKS.map(b => b.mdType));
+    for (const m of mappings) {
+      const src = m.source_block;
+      if (!src) continue;
+      if (knownIds.has(src) || knownMd.has(src)) {
+        // Enrich existing catalog entry with bridge metadata (example, fields).
+        const b = BLOCKS.find(x => x.id === src || x.mdType === src);
+        if (b && m.example_source && !b.mdExample) b.mdExample = m.example_source;
+        continue;
+      }
+      // Bridge-only block — surface it as a fresh catalog entry so the
+      // editor's slash menu / SlashMenu can offer it. Display metadata is
+      // generated by humanising the source_block name.
+      BLOCKS.push({
+        id: src,
+        intent: FAMILY_TO_INTENT[m.source_family] || 'structure',
+        label: src.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        desc:  m.example_source ? 'Custom block from the bridge.' : 'Bridge-defined block.',
+        icon:  'blocks',
+        mdType: src,
+        mdExample: m.example_source || `:::${src}\n:::`,
+        fromBridge: true,
+      });
+      knownIds.add(src);
+    }
+    catalogVersion++;
+    // Notify React-side consumers so memoised filters refresh.
+    try {
+      if (typeof window !== 'undefined' && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent('block-catalog:updated', { detail: { version: catalogVersion } }));
+      }
+    } catch (_) {}
+    return catalogVersion;
+  }
+
+  return {
+    INTENTS,
+    BLOCKS,
+    CALLOUTS,
+    EXPERT_IDS,
+    byId,
+    byIntent,
+    labelOf,
+    iconOf,
+    descOf,
+    isExpertMode,
+    insertableBlocks,
+    syncFromBridge,
+    getCatalogVersion: () => catalogVersion,
+  };
+
+}));
+
+</script>
+<script>
+/* ============================================================
+   ÉTAT
+   ============================================================ */
+const LS_KEY = 'cnsmdp-atelier-draft';
+const WPM_LOW = 90, WPM_HIGH = 120;   // 900–1200 mots / 10 min
+let uid = 1; const nid = () => 'n' + (uid++) + '-' + Date.now().toString(36);
+
+function blankLesson(n){ return {
+  id:nid(), title:'Chapitre '+n, durationMin:35, prereq:'',
+  objectives:'', blocks:[], notes:''
+};}
+// Crée un bloc {id,type,data} en s'appuyant sur le registre BLOCKDEFS.
+function blankBlock(type){
+  const def=BLOCKDEFS[type]||BLOCKDEFS.paragraph;
+  return { id:nid(), type:(BLOCKDEFS[type]?type:'paragraph'), data: def.blank() };
+}
+function blankPart(n){ return { id:nid(), title:'Partie '+n, intention:'', lessons:[blankLesson(n+'.1')] };}
+
+let state = {
+  meta:{ title:'Mon cours', authors:'', public:'', duration:'', date:new Date().toISOString().slice(0,10) },
+  intro:{ intentions:'', objectives:'', prerequis:'' },
+  parts:[ blankPart(1) ],
+  conclusion:{ text:'', essentiel:'' }
+};
+let selected = { type:'intro' };
+
+/* ============================================================
+   PERSISTANCE
+   ============================================================ */
+let saveTimer=null;
+function markDirty(){
+  setSaveState('Enregistrement…');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    setSaveState('Enregistré ✓');
+  },500);
+}
+function setSaveState(t){ document.getElementById('saveState').textContent=t; }
+function restore(){
+  const raw=localStorage.getItem(LS_KEY);
+  if(raw){ try{ state=JSON.parse(raw); }catch(e){} }
+  migrateState();
+}
+// Convertit les anciens brouillons (sections/media/activities) vers le modèle
+// unifié lesson.blocks. Idempotent : ne touche pas une leçon déjà migrée.
+function migrateState(){
+  (state.parts||[]).forEach(p=>(p.lessons||[]).forEach(L=>{
+    // Renomme les titres auto « Leçon N » des anciens brouillons en « Chapitre N »
+    // (sans toucher aux titres personnalisés saisis par l'expert).
+    if(L && typeof L.title==='string' && /^Leçon(\s|$)/.test(L.title)) L.title=L.title.replace(/^Leçon/, 'Chapitre');
+    migrateLesson(L);
+  }));
+}
+function migrateLesson(L){
+  if(Array.isArray(L.blocks)) return;            // déjà au nouveau format
+  const blocks=[];
+  if(L.intro && L.intro.trim()) blocks.push({id:nid(),type:'paragraph',data:{text:L.intro}});
+  (L.sections||[]).forEach(s=>{
+    if(s.title) blocks.push({id:nid(),type:'subheading',data:{text:s.title}});
+    if(s.content) blocks.push({id:nid(),type:'paragraph',data:{text:s.content}});
+  });
+  (L.media||[]).forEach(m=>{
+    if(m.type==='video_expert'){
+      blocks.push({id:nid(),type:'video_expert',data:{title:m.title||'',expert:'',role:'',src:m.source||'',transcript:m.intention||''}});
+    } else if(m.type==='image'){
+      blocks.push({id:nid(),type:'image',data:{src:m.source||'',alt:'',caption:m.title||'',body:m.intention||''}});
+    } else if(m.type==='video'){
+      blocks.push({id:nid(),type:'video',data:{title:m.title||'',src:m.source||'',startTime:m.tcStart||'',endTime:m.tcEnd||'',body:m.intention||''}});
+    } else { // audio / ecoute
+      blocks.push({id:nid(),type:'audio',data:{title:m.title||'',src:m.source||'',startTime:m.tcStart||'',endTime:m.tcEnd||'',transcript:'',body:m.intention||''}});
+    }
+  });
+  (L.activities||[]).forEach(a=>{
+    if(a.kind==='qcm'){
+      blocks.push({id:nid(),type:'qcm',data:{question:a.question||'',options:(a.options||[]).map(o=>({text:o.text||'',correct:!!o.correct,feedback:o.feedback||''})),explanation:a.globalFeedback||''}});
+    } else if(a.kind==='exercice'){
+      blocks.push({id:nid(),type:'reflection',data:{title:a.type||'Exercice',body:a.instructions||'',feedback:[a.expected&&('Attendu : '+a.expected),a.feedback].filter(Boolean).join('\n')}});
+    } else {
+      blocks.push({id:nid(),type:'reflection',data:{title:'',body:a.question||'',feedback:a.expected||''}});
+    }
+  });
+  if(L.aRetenir && L.aRetenir.trim()) blocks.push({id:nid(),type:'a_retenir',data:{title:'',text:L.aRetenir}});
+  if(L.allerPlusLoin && L.allerPlusLoin.trim()) blocks.push({id:nid(),type:'paragraph',data:{text:L.allerPlusLoin}});
+  if(L.resources && L.resources.trim()) blocks.push({id:nid(),type:'resources',data:{title:'Références du chapitre',text:L.resources}});
+  L.blocks=blocks;
+  delete L.intro; delete L.sections; delete L.media; delete L.activities;
+  delete L.aRetenir; delete L.allerPlusLoin; delete L.resources;
+}
+
+function saveProject(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  triggerDownload(blob, slug(state.meta.title)+'.atelier.json');
+  toast('Brouillon enregistré sur votre ordinateur');
+}
+function loadProject(){
+  const inp=document.getElementById('fileInput');
+  inp.onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ try{ state=JSON.parse(r.result); selected={type:'intro'}; render(); markDirty(); toast('Brouillon chargé'); }
+      catch(err){ toast('Fichier illisible'); } };
+    r.readAsText(f); inp.value='';
+  };
+  inp.click();
+}
+function triggerDownload(blob,name){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function slug(s){ return (s||'cours').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'cours'; }
+
+/* ============================================================
+   HELPERS DE COMPTAGE
+   ============================================================ */
+function countWords(s){ if(!s) return 0; const t=String(s).replace(/[#*_>`\-\[\]]/g,' ').trim(); return t? t.split(/\s+/).length : 0; }
+function blockWords(b){
+  let n=0; const d=b.data||{};
+  for(const k in d){ const v=d[k];
+    if(typeof v==='string') n+=countWords(v);
+    else if(Array.isArray(v)) v.forEach(o=>{
+      if(typeof o==='string') n+=countWords(o);
+      else if(o&&typeof o==='object') for(const kk in o){ if(typeof o[kk]==='string') n+=countWords(o[kk]); }
+    });
+  }
+  return n;
+}
+function lessonWordCount(L){
+  let n=countWords(L.objectives);
+  (L.blocks||[]).forEach(b=>{ n+=blockWords(b); });
+  return n;
+}
+function targetRange(min){ return [Math.round((min||0)*WPM_LOW), Math.round((min||0)*WPM_HIGH)]; }
+// Temps apprenant estimé (min) à partir d'un nombre de mots : plus le texte est
+// dense, plus l'apprenant·e met de temps. [bas = mots/120, haut = mots/90].
+function estLearnerTime(words){ words=words||0; return [Math.round(words/WPM_HIGH), Math.round(words/WPM_LOW)]; }
+const CHAP_MIN_DEFAULT = 35;   // un chapitre vise 30 à 45 min
+function fmt(n){ return n.toLocaleString('fr-FR'); }
+
+// NB : le « Guide de conception » (lecture + calculateur de volume) vit
+// désormais dans la page autonome templates/guide-conception.html, ouverte
+// en lien depuis la sidebar — plus simple à éditer à la main.
+function calcDuration(min){ if(min<60) return min+' min'; const h=Math.floor(min/60), r=min%60; return r===0? h+'h' : h+'h'+String(r).padStart(2,'0'); }
+
+/* ============================================================
+   RENDU — SIDEBAR
+   ============================================================ */
+function isActive(t){
+  if(selected.type!==t.type) return false;
+  if(t.type==='lesson') return selected.partId===t.partId && selected.lessonId===t.lessonId;
+  if(t.type==='part') return selected.partId===t.partId;
+  return true;
+}
+function lessonBadge(L){
+  const c=lessonWordCount(L); const [lo,hi]=targetRange(L.durationMin);
+  let cls='low', txt=fmt(c);
+  if(c>hi) cls='over'; else if(c>=lo && c>0) cls='ok';
+  return `<span class="badge ${cls}" id="badge-${L.id}">${txt}</span>`;
+}
+function renderSidebar(){
+  const el=document.getElementById('sidebar');
+  let h=`<input class="course-name" id="courseName" value="${esc(state.meta.title)}" placeholder="Titre du cours">`;
+  h+=`<span class="micro">Plan du cours</span>`;
+  h+=`<button class="node ${isActive({type:'intro'})?'active':''}" onclick="select({type:'intro'})">
+        <span class="lbl">Introduction du cours</span></button>`;
+  state.parts.forEach((p,pi)=>{
+    h+=`<div class="part-group">`;
+    h+=`<button class="node part ${isActive({type:'part',partId:p.id})?'active':''}" onclick="select({type:'part',partId:'${p.id}'})">
+          <span class="lbl">${esc(p.title||('Partie '+(pi+1)))}</span></button>`;
+    p.lessons.forEach(L=>{
+      h+=`<button class="node lesson ${isActive({type:'lesson',partId:p.id,lessonId:L.id})?'active':''}"
+            onclick="select({type:'lesson',partId:'${p.id}',lessonId:'${L.id}'})">
+            <span class="lbl">${esc(L.title||'Chapitre')}</span>${lessonBadge(L)}</button>`;
+    });
+    h+=`<div class="add-row"><button class="add-link" onclick="addLesson('${p.id}')">+ Ajouter un chapitre</button></div>`;
+    h+=`</div>`;
+  });
+  h+=`<div class="add-row"><button class="add-link" onclick="addPart()">+ Ajouter une partie</button></div>`;
+  h+=`<span class="micro">Fin</span>`;
+  h+=`<button class="node ${isActive({type:'conclusion'})?'active':''}" onclick="select({type:'conclusion'})">
+        <span class="lbl">Conclusion du cours</span></button>`;
+
+  /* ---------- Aide ---------- */
+  h+=`<span class="micro aide-sep">Aide</span>`;
+  h+=`<a class="node guide-link" href="guide-conception.html" target="_blank" rel="noopener" title="Ouvre le guide dans un nouvel onglet">
+        <span class="lbl">Guide de conception</span><span class="gl-ext">↗</span></a>`;
+  /* Lien vers le cours-exemple — à compléter avec l'URL du cours :
+  h+=`<a class="node guide-link" href="URL_DE_VOTRE_COURS" target="_blank" rel="noopener" title="Voir le cours-exemple">
+        <span class="lbl">Cours-exemple « le guide, en cours »</span><span class="gl-ext">↗</span></a>`; */
+
+  el.innerHTML=h;
+  document.getElementById('courseName').addEventListener('input',e=>{ state.meta.title=e.target.value; markDirty(); });
+}
+function refreshBadge(L){
+  const b=document.getElementById('badge-'+L.id); if(!b) return;
+  const c=lessonWordCount(L); const [lo,hi]=targetRange(L.durationMin);
+  let cls='low'; if(c>hi) cls='over'; else if(c>=lo && c>0) cls='ok';
+  b.className='badge '+cls; b.textContent=fmt(c);
+}
+
+/* ============================================================
+   RENDU — PANNEAU PRINCIPAL
+   ============================================================ */
+function findPart(id){ return state.parts.find(p=>p.id===id); }
+function findLesson(pid,lid){ const p=findPart(pid); return p? p.lessons.find(l=>l.id===lid):null; }
+
+function render(){ renderSidebar(); renderWork(); }
+function select(t){ selected=t; render();
+  if(window.innerWidth<=860) document.querySelector('aside.nav').classList.remove('open');
+  document.querySelector('main.work').scrollTop=0;
+}
+
+function renderWork(){
+  const w=document.getElementById('work');
+  if(selected.type==='intro') w.innerHTML=viewIntro();
+  else if(selected.type==='conclusion') w.innerHTML=viewConclusion();
+  else if(selected.type==='part') w.innerHTML=viewPart(findPart(selected.partId));
+  else if(selected.type==='lesson') w.innerHTML=viewLesson(findPart(selected.partId), findLesson(selected.partId,selected.lessonId));
+  bindWork();
+  syncBarGauge();
+}
+
+/* ---------- Vue : Introduction du cours ---------- */
+function viewIntro(){
+  return `
+  <div class="crumb">Introduction</div>
+  <h1 class="page">Introduction du cours</h1>
+  <p class="hint">C'est le premier contact de l'apprenant·e avec votre cours. Elle doit donner envie et poser le cadre.</p>
+
+  <div class="tip"><span class="ic">✎</span><div><b>Avant tout, le cadre matériel.</b> Ces informations nous aident à dimensionner le projet.</div></div>
+  <div class="row">
+    <div class="field"><label class="lab">Auteur·e(s)</label><input class="txt" data-m="authors" value="${esc(state.meta.authors)}" placeholder="Votre nom"></div>
+    <div class="field"><label class="lab">Durée totale visée</label><input class="txt" data-m="duration" value="${esc(state.meta.duration)}" placeholder="ex. 4 à 5 h"></div>
+  </div>
+  <div class="field"><label class="lab">Public visé</label>
+    <input class="txt" data-m="public" value="${esc(state.meta.public)}" placeholder="ex. étudiant·es de 2e cycle, professionnel·les en reprise…"></div>
+
+  <h2 class="sec">Pourquoi ce cours ? — vos intentions</h2>
+  <div class="tip"><span class="ic">★</span><div><b>Astuce « page blanche » (JC Vançon).</b> Partez d'un <b>cas particulier exemplaire</b>
+    (une œuvre, une interprétation, une expérience), mettez plusieurs cas en relation, et creusez <b>une</b> problématique précise.
+    Un cours <b>forme</b>, il n'informe pas seulement : visez des savoirs <i>et</i> des savoir-faire.</div></div>
+  <div class="field"><textarea class="txt big" data-i="intentions" placeholder="Votre angle, votre problématique centrale, ce qui rend ce cours singulier…">${esc(state.intro.intentions)}</textarea></div>
+
+  <h2 class="sec">Objectifs généraux</h2>
+  <div class="tip info"><span class="ic">◎</span><div>3 à 6 objectifs, <b>un par ligne</b>, chacun commençant par un <b>verbe d'action</b>.
+    Distinguez les <b>savoirs</b> (comprendre, identifier, analyser…) des <b>savoir-faire</b> (produire, exécuter, choisir, corriger…).</div></div>
+  <div class="field"><textarea class="txt" data-i="objectives" placeholder="À la fin de ce cours, vous saurez…
+À la fin de ce cours, vous serez capable de…">${esc(state.intro.objectives)}</textarea></div>
+
+  <h2 class="sec">Public et prérequis</h2>
+  <div class="field"><label class="lab">Prérequis</label>
+    <div class="hint">Que faut-il déjà savoir ou savoir-faire pour suivre ce cours ?</div>
+    <textarea class="txt" data-i="prerequis" placeholder="ex. avoir des bases d'harmonie, savoir lire une partition…">${esc(state.intro.prerequis)}</textarea></div>
+
+  <h2 class="sec">Plan général</h2>
+  <div class="tip"><span class="ic">≡</span><div>Le plan se construit tout seul à partir des <b>parties</b> et des <b>chapitres</b> que vous créez dans le menu de gauche.
+    Une partie vise <b>1h30 à 2h</b>, un chapitre <b>30 à 45 min</b>. Voici l'état actuel :</div></div>
+  ${planRecap()}
+  `;
+}
+function planRecap(){
+  if(!state.parts.length) return `<p class="empty-note">Aucune partie pour l'instant. Ajoutez-en une dans le menu de gauche.</p>`;
+  let h='<div>';
+  state.parts.forEach((p,i)=>{ h+=`<div class="summary-pill"><b>${esc(p.title||('Partie '+(i+1)))}</b> · ${p.lessons.length} chapitre(s)</div>`; });
+  return h+'</div>';
+}
+
+/* ---------- Vue : Partie ---------- */
+function viewPart(p){
+  if(!p) return '';
+  const idx=state.parts.indexOf(p)+1;
+  let totalWords=0;
+  p.lessons.forEach(L=>{ totalWords+=lessonWordCount(L); });
+  const [ptLo,ptHi]=estLearnerTime(totalWords);
+  return `
+  <div class="crumb">Partie ${idx}</div>
+  <input class="txt" data-part="title" value="${esc(p.title)}" placeholder="Titre de la partie"
+     style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:600;border:none;padding-left:0;color:var(--ink)">
+  <div class="hint" style="margin-top:6px">Une partie regroupe plusieurs chapitres et vise <b>1h30 à 2h</b> de temps apprenant.</div>
+  <div class="field" style="margin-top:14px">
+    <label class="lab">Intention de la partie</label>
+    <div class="hint">En 2-3 phrases : ce que couvre cette partie et pourquoi elle arrive ici dans la progression.</div>
+    <textarea class="txt" data-part="intention" placeholder="Présentation de la partie…">${esc(p.intention)}</textarea>
+  </div>
+  <div class="gauge">
+    <div class="top-line"><span class="count">≈ ${calcDuration(ptLo)}–${calcDuration(ptHi)} <small>temps apprenant · ${fmt(totalWords)} mots</small></span>
+      <span class="target">${p.lessons.length} chapitre(s) · cible 1h30–2h</span></div>
+    <div class="hint" style="margin:0">Cumul estimé des chapitres de cette partie, calculé sur le volume de texte écrit.</div>
+  </div>
+  <div class="add-block">
+    <button class="btn" onclick="addLesson('${p.id}')">+ Ajouter un chapitre</button>
+    <button class="btn btn--danger" onclick="removePart('${p.id}')">Supprimer cette partie</button>
+  </div>
+  `;
+}
+
+/* ---------- Vue : Chapitre ---------- */
+function viewLesson(p,L){
+  if(!L) return '';
+  return `
+  <div class="crumb">${esc(p.title)} › Chapitre</div>
+  <input class="txt" data-l="title" value="${esc(L.title)}" placeholder="Titre du chapitre"
+     style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:600;border:none;padding-left:0;color:var(--ink)">
+
+  <h2 class="sec" style="margin-top:18px">Objectifs du chapitre</h2>
+  <div class="hint">3 à 5 objectifs, un par ligne, commençant par un verbe d'action.</div>
+  <div class="field"><textarea class="txt" data-l="objectives" placeholder="Identifier…
+Analyser…
+Mettre en œuvre…">${esc(L.objectives)}</textarea></div>
+
+  <h2 class="sec">Contenu du chapitre</h2>
+  <div class="tip"><span class="ic">✎</span><div><b>Composez votre chapitre bloc par bloc.</b> Rédigez comme si vous dictiez le cours à un·e collègue —
+    ajoutez du texte, vos médias, des activités. Réordonnez avec ▲ ▼. La barre d'outils en haut met en forme le champ où vous écrivez.</div></div>
+  <div id="blocks">${(L.blocks&&L.blocks.length)? L.blocks.map((b,i)=>blockCard(b,i,L.blocks.length)).join('') : '<p class="empty-note">Aucun bloc pour l\'instant — ajoutez-en un ci-dessous.</p>'}</div>
+  <div class="palette-wrap">
+    <button class="btn add-blk-btn" id="paletteToggle" onclick="togglePalette()">+ Ajouter un bloc</button>
+    ${blockPalette()}
+  </div>
+
+  <h2 class="sec">Notes pour l'équipe</h2>
+  <div class="hint">Doutes, points à valider, médias à fournir plus tard… (ne sera pas montré à l'apprenant·e)</div>
+  <div class="field"><textarea class="txt" data-l="notes" placeholder="Vos notes libres…">${esc(L.notes)}</textarea></div>
+
+  <div class="add-block" style="margin-top:24px">
+    <button class="btn btn--danger" onclick="removeLesson('${p.id}','${L.id}')">Supprimer ce chapitre</button>
+  </div>
+  `;
+}
+
+/* ============================================================
+   REGISTRE DES BLOCS — éditeur unifié (liste blanche EXPERT_IDS)
+   Chaque bloc : blank() · fields|edit() · serialize() · preview()
+   La sérialisation suit la grammaire MD-ScormStack (cf. bridge +
+   editor-toolbar.jsx du learning editor) pour rebridger sans perte.
+   ============================================================ */
+const BLOCK_ICON={ paragraph:'¶',heading:'H1',subheading:'H2',bullet_list:'•',numbered_list:'1.',
+  table:'▦',columns:'▥',plan:'≡',citation:'❝',callout:'❗',objectifs:'◎',video_expert:'☻',
+  video:'▶',audio:'♪',image:'▣',illustration_brief:'✎',motion_design:'✦',module_sur_mesure:'◈',image_with_text:'▤',
+  pdf:'¶',reflection:'?',listening:'♫',a_retenir:'★',resources:'↗',qcm:'☑',qcu:'◉',
+  truefalse:'⊻',assessment:'✓',quiz_final:'⚑' };
+function ICON(t){ return BLOCK_ICON[t]||'■'; }
+const FAM_FR={ structure:'Structure & texte', hook:'Accroche', present:'Présenter',
+  practise:'Faire pratiquer', memorise:'Mémoriser', assess:'Évaluer' };
+const CALLOUT_FR={ note:'Note', tip:'Conseil', warn:'Attention', def:'Définition',
+  example:'Exemple', important:'Important', illu:'Besoin illustration' };
+const MODULE_INT_FR={ slider:'Curseur / slider', dragdrop:'Glisser-déposer', quiz:'Quiz interactif',
+  simulation:'Simulation', explore:'Exploration cliquable', timeline:'Frise / timeline',
+  compare:'Comparateur avant/après', other:'Autre (précisé ci-dessous)' };
+
+// — Helpers de sérialisation —
+function A(pairs){ // pairs:[ [name,val] | [name,val,'raw'] ] ; ignore vides
+  const out=pairs.filter(p=>p[1]!=null&&p[1]!=='').map(p=> p[2]==='raw'?`${p[0]}=${p[1]}`:`${p[0]}="${attr(p[1])}"`);
+  return out.length?' {'+out.join(' ')+'}':'';
+}
+function fence(type,attrs,body){ return `:::${type}${attrs||''}\n`+(body&&body.trim()?body.trim()+'\n':'')+':::'; }
+function bullets(text){ return lines(text).map(x=>'- '+x).join('\n'); }
+
+// — Rendu générique d'un formulaire à partir de def.fields —
+function fieldHTML(f,d){
+  const v=d[f.k]==null?'':d[f.k];
+  const hint=f.hint?`<div class="hint">${f.hint}</div>`:'';
+  if(f.t==='select'){
+    return `<div class="field"><label class="lab">${f.label}</label>${hint}<select class="txt" data-bf="${f.k}">`+
+      f.opts.map(o=>`<option value="${esc(o.v)}" ${String(v)===String(o.v)?'selected':''}>${esc(o.t)}</option>`).join('')+`</select></div>`;
+  }
+  if(f.t==='text'){
+    return `<div class="field"><label class="lab">${f.label}</label>${hint}<input class="txt" data-bf="${f.k}" value="${esc(v)}" placeholder="${esc(f.ph||'')}"></div>`;
+  }
+  const cls=f.t==='bigarea'?'txt big':'txt';
+  return `<div class="field"><label class="lab">${f.label}</label>${hint}<textarea class="${cls}" data-bf="${f.k}" placeholder="${esc(f.ph||'')}">${esc(v)}</textarea></div>`;
+}
+function editGeneric(def,d){ return (def.fields||[]).map(f=>fieldHTML(f,d)).join(''); }
+function blankFromFields(def){ const d={}; (def.fields||[]).forEach(f=>{ d[f.k]= f.t==='select'?(f.opts[0]?f.opts[0].v:''):''; }); return d; }
+
+// — Options (qcm / qcu) —
+function optRowB(o,i,single){
+  return `<div class="opt-row ${o.correct?'is-correct':''}" data-optb="${i}">
+    <div class="correct-wrap"><input type="${single?'radio':'checkbox'}" data-ob-correct ${o.correct?'checked':''}><small>juste</small></div>
+    <div class="opt-fields">
+      <input class="txt" data-ob-text value="${esc(o.text)}" placeholder="Réponse ${i+1}">
+      <textarea class="txt" data-ob-fb placeholder="Retour si cette réponse est choisie…" style="margin-top:6px;min-height:50px">${esc(o.feedback)}</textarea>
+    </div>
+    <button class="btn btn--danger btn--sm" data-rmopt="${i}" title="Retirer cette réponse">×</button>
+  </div>`;
+}
+function editChoices(d,id,single){
+  return `<div class="field" style="margin-top:0"><label class="lab">Question</label>
+      <input class="txt" data-bf="question" value="${esc(d.question)}" placeholder="Énoncé de la question"></div>
+    <label class="lab">Réponses <span style="font-weight:400;color:var(--ink-faint)">— ${single?'une seule juste':'cochez la/les bonne(s)'}, avec un retour pour chacune</span></label>
+    <div class="opts">${(d.options||[]).map((o,i)=>optRowB(o,i,single)).join('')}</div>
+    <button class="add-link" onclick="addOptB('${id}')" style="margin:4px 0 12px">+ Ajouter une réponse</button>
+    ${single?'':`<div class="field"><label class="lab">Retour global (après réponse)</label>
+      <textarea class="txt" data-bf="explanation" placeholder="Synthèse affichée quelle que soit la réponse.">${esc(d.explanation)}</textarea></div>`}`;
+}
+
+// — Assessment / quiz final —
+const Q_TYPES=[{v:'MultipleChoice',t:'Choix multiple (1 bonne)'},{v:'MultipleResponse',t:'Choix multiples (plusieurs)'},
+  {v:'StringResponse',t:'Réponse texte'},{v:'NumericalResponse',t:'Réponse numérique'}];
+function blankQuestion(){ return {title:'',type:'MultipleChoice',raw:'',answer:'',solution:''}; }
+function editAssessment(d,id){
+  let h=`<div class="row"><div class="field" style="margin-top:0"><label class="lab">Titre du quiz</label>
+      <input class="txt" data-bf="title" value="${esc(d.title)}" placeholder="ex. Quiz de fin de partie"></div>
+    <div class="field" style="margin-top:0"><label class="lab">Tentatives max (optionnel)</label>
+      <input class="txt" data-bf="maxAttempts" value="${esc(d.maxAttempts)}" placeholder="ex. 2"></div></div>`;
+  h+=`<div class="qlist">`;
+  (d.questions||[]).forEach((q,qi)=>{
+    const isChoice=(q.type==='MultipleChoice'||q.type==='MultipleResponse');
+    h+=`<div class="qcard" data-qcard="${qi}">
+      <div class="card-head"><span class="ctag">Question ${qi+1}</span>
+        <button class="btn btn--danger btn--sm" onclick="removeQ('${id}',${qi})">Retirer</button></div>
+      <div class="field" style="margin-top:0"><label class="lab">Énoncé</label>
+        <input class="txt" data-qf="title" value="${esc(q.title)}" placeholder="La question posée"></div>
+      <div class="field"><label class="lab">Type</label>
+        <select class="txt" data-qf="type">${Q_TYPES.map(t=>`<option value="${t.v}" ${q.type===t.v?'selected':''}>${t.t}</option>`).join('')}</select></div>
+      ${isChoice
+        ? `<div class="field"><label class="lab">Réponses</label><div class="hint">Une par ligne : <code>texte | x</code> pour une bonne réponse · <code>texte | x | retour</code> pour ajouter un feedback.</div>
+            <textarea class="txt" data-qf="raw" placeholder="Bonne réponse | x | Bravo&#10;Mauvaise réponse | | Pas tout à fait">${esc(q.raw)}</textarea></div>`
+        : `<div class="field"><label class="lab">Réponse(s) acceptée(s)</label><div class="hint">Séparez les variantes par « | ».</div>
+            <textarea class="txt" data-qf="answer" placeholder="${q.type==='NumericalResponse'?'ex. 440':'réponse | variante'}">${esc(q.answer)}</textarea></div>`}
+      <div class="field" style="margin-bottom:0"><label class="lab">Explication / corrigé (optionnel)</label>
+        <textarea class="txt" data-qf="solution" placeholder="Pourquoi cette réponse.">${esc(q.solution)}</textarea></div>
+    </div>`;
+  });
+  h+=`</div><button class="add-link" onclick="addQ('${id}')" style="margin:4px 0">+ Ajouter une question</button>`;
+  return h;
+}
+function serializeQuestions(d,type){
+  let out=`:::${type}`+A([['title',d.title],['maxAttempts',d.maxAttempts]])+'\n';
+  (d.questions||[]).forEach(q=>{
+    out+=`\n### Q: ${q.title||''}\nType: ${q.type||'MultipleChoice'}\n`;
+    if(q.type==='MultipleChoice'||q.type==='MultipleResponse'){
+      lines(q.raw).forEach(ln=>{ const parts=ln.split('|').map(s=>s.trim());
+        const text=parts[0]||''; const correct=/^(x|true|oui|1|✓)$/i.test(parts[1]||''); const fb=parts[2]||'';
+        out+=`- ${text} | ${correct?'true':'false'}${fb?' | '+fb:''}\n`; });
+    } else if(q.type==='StringResponse'){
+      out+=`Answer: ${lines(q.answer).join(' | ')||(q.answer||'').trim()}\n`;
+    } else if(q.type==='NumericalResponse'){
+      out+=`Answer: ${(q.answer||'').trim()}\n`;
+    }
+    if(q.solution&&q.solution.trim()){ out+=`\n#### Solution\n${q.solution.trim()}\n`; }
+  });
+  return out+':::';
+}
+function previewQuestions(d){
+  let h=`<div class="pv-callout q"><div class="pv-c-t">${esc(d.title||'Évaluation')}</div>`;
+  (d.questions||[]).forEach((q,i)=>{ h+=`<div class="pv-body" style="margin-top:8px"><b>${i+1}. ${esc(q.title||'Question')}</b></div>`;
+    if(q.type==='MultipleChoice'||q.type==='MultipleResponse'){
+      h+='<ul>'+lines(q.raw).map(ln=>{ const p=ln.split('|').map(s=>s.trim()); const ok=/^(x|true|oui|1|✓)$/i.test(p[1]||''); return `<li>${ok?'✓ ':''}${esc(p[0]||'')}</li>`; }).join('')+'</ul>';
+    } else if(q.answer){ h+=`<div class="pv-media-m">Réponse : ${esc(q.answer)}</div>`; }
+  });
+  return h+'</div>';
+}
+
+// — Aperçu : helpers —
+function pvCallout(title,body,cls){
+  return `<div class="pv-callout ${cls||''}">${title?`<div class="pv-c-t">${esc(title)}</div>`:''}${body&&body.trim()?`<div class="pv-body">${mdBlock(body)}</div>`:''}</div>`;
+}
+function pvMedia(label,ic,title,metaArr,body){
+  const meta=(metaArr||[]).filter(Boolean).map(x=>`<div class="pv-media-m">${x}</div>`).join('');
+  return `<div class="pv-media"><div class="pv-media-ic">${ic}</div><div class="pv-media-b">`+
+    `<div class="pv-media-k">${esc(label)}</div>`+(title?`<div class="pv-media-t">${esc(title)}</div>`:'')+meta+
+    (body&&body.trim()?`<div class="pv-body" style="margin-top:6px">${mdBlock(body)}</div>`:'')+`</div></div>`;
+}
+function srcMeta(d){
+  const a=[];
+  if(d.startTime||d.endTime) a.push(`⏱ ${esc(d.startTime||'?')} → ${esc(d.endTime||'?')}`);
+  const url=d.src||d.sourceUrl;
+  if(url){ const isUrl=/^https?:\/\//i.test(String(url).trim());
+    a.push(isUrl?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`:esc(url)); }
+  return a;
+}
+function pvChoices(d,single){
+  const id=++pvQ;
+  const opts=(d.options||[]).map((o,i)=>
+    `<button class="pv-choice" data-pv-opt data-correct="${o.correct?1:0}" data-fb="${o.feedback?(id+'-'+i):''}">${esc(o.text||('Réponse '+(i+1)))}</button>`+
+    (o.feedback?`<div class="pv-fb" id="fb-${id}-${i}">${mdInline(o.feedback)}</div>`:'')).join('');
+  return `<div class="pv-qcm"><div class="pv-q">${esc(d.question||'Question')}</div>${opts}`+
+    (d.explanation?`<div class="pv-global" id="gfb-${id}">${mdInline(d.explanation)}</div>`:'')+`</div>`;
+}
+
+const BLOCKDEFS={
+  paragraph:{ label:'Paragraphe',
+    fields:[{k:'text',t:'bigarea',label:'Texte',ph:'Rédigez votre paragraphe…'}],
+    serialize:d=>(d.text||'').trim(),
+    preview:d=>d.text&&d.text.trim()?`<div class="pv-body">${mdBlock(d.text)}</div>`:'' },
+  heading:{ label:'Titre (H1)',
+    fields:[{k:'text',t:'text',label:'Titre — ouvre une nouvelle slide',ph:'Titre de section'}],
+    serialize:d=>'# '+(d.text||'').trim(),
+    preview:d=>`<div class="pv-h3" style="font-size:var(--text-md);border-top:1px solid var(--border);padding-top:14px">${esc(d.text||'')}</div>` },
+  subheading:{ label:'Sous-titre (H2)',
+    fields:[{k:'text',t:'text',label:'Sous-titre',ph:'Sous-titre'}],
+    serialize:d=>'## '+(d.text||'').trim(),
+    preview:d=>`<div class="pv-h3">${esc(d.text||'')}</div>` },
+  bullet_list:{ label:'Liste à puces',
+    fields:[{k:'text',t:'area',label:'Éléments (un par ligne)',ph:'Premier point\nDeuxième point'}],
+    serialize:d=>bullets(d.text),
+    preview:d=>listHTML(d.text) },
+  numbered_list:{ label:'Liste numérotée',
+    fields:[{k:'text',t:'area',label:'Étapes / éléments (un par ligne)',ph:'Première étape\nDeuxième étape'}],
+    serialize:d=>lines(d.text).map((x,i)=>(i+1)+'. '+x).join('\n'),
+    preview:d=>{ const ls=lines(d.text); return ls.length?('<ol style="margin:0 0 12px;padding-left:22px">'+ls.map(x=>`<li>${mdInline(x)}</li>`).join('')+'</ol>'):''; } },
+  table:{ label:'Tableau',
+    fields:[{k:'text',t:'area',label:'Tableau',hint:'Une rangée par ligne, colonnes séparées par « | ». La 1ʳᵉ ligne = en-têtes.',ph:'Colonne A | Colonne B\nvaleur | valeur'}],
+    serialize:d=>{ const rows=lines(d.text).map(r=>r.split('|').map(c=>c.trim())); if(!rows.length)return '';
+      const head=rows[0]; let out='| '+head.join(' | ')+' |\n| '+head.map(()=>'---').join(' | ')+' |';
+      rows.slice(1).forEach(r=>{ out+='\n| '+r.join(' | ')+' |'; }); return out; },
+    preview:d=>{ const rows=lines(d.text).map(r=>r.split('|').map(c=>c.trim())); if(!rows.length)return '';
+      let h='<table class="pv-table"><thead><tr>'+rows[0].map(c=>`<th>${esc(c)}</th>`).join('')+'</tr></thead><tbody>';
+      rows.slice(1).forEach(r=>{ h+='<tr>'+r.map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>'; }); return h+'</tbody></table>'; } },
+  columns:{ label:'Deux colonnes',
+    fields:[{k:'left',t:'area',label:'Colonne de gauche'},{k:'right',t:'area',label:'Colonne de droite'}],
+    serialize:d=>`:::columns\n### left\n${(d.left||'').trim()}\n---\n### right\n${(d.right||'').trim()}\n:::`,
+    preview:d=>`<div class="pv-cols"><div class="pv-body">${mdBlock(d.left)}</div><div class="pv-body">${mdBlock(d.right)}</div></div>` },
+  plan:{ label:'Plan',
+    fields:[{k:'title',t:'text',label:'Titre',ph:'Plan'},{k:'text',t:'area',label:'Entrées (une par ligne)'}],
+    serialize:d=>fence('plan',A([['title',d.title||'Plan']]),bullets(d.text)),
+    preview:d=>`<div class="pv-obj"><div class="pv-obj-t">${esc(d.title||'Plan')}</div>${listHTML(d.text)}</div>` },
+  citation:{ label:'Citation',
+    fields:[{k:'body',t:'area',label:'Citation'},{k:'author',t:'text',label:'Auteur·e'},{k:'role',t:'text',label:'Fonction / rôle'},{k:'source',t:'text',label:'Source'}],
+    serialize:d=>fence('citation',A([['author',d.author],['role',d.role],['source',d.source]]),(d.body||'').trim()),
+    preview:d=>`<div class="pv-callout"><div class="pv-body" style="font-style:italic">${mdBlock(d.body)}</div>${d.author?`<div class="pv-media-m">— ${esc(d.author)}${d.role?', '+esc(d.role):''}</div>`:''}</div>` },
+  callout:{ label:'Encadré',
+    fields:[{k:'type',t:'select',label:'Type',opts:[{v:'note',t:'Note'},{v:'tip',t:'Conseil'},{v:'warn',t:'Attention'},{v:'def',t:'Définition'},{v:'example',t:'Exemple'},{v:'important',t:'Important'},{v:'illu',t:'Besoin illustration'}]},{k:'title',t:'text',label:'Titre (optionnel)'},{k:'body',t:'area',label:'Contenu'}],
+    serialize:d=>fence('callout',A([['type',d.type||'note','raw'],['title',d.title]]),(d.body||'').trim()),
+    preview:d=>pvCallout(d.title||CALLOUT_FR[d.type]||'Note',d.body,(d.type==='def'||d.type==='note')?'note':(d.type==='important'||d.type==='warn')?'q':'') },
+  objectifs:{ label:'Objectifs',
+    fields:[{k:'title',t:'text',label:'Titre',ph:'Objectifs'},{k:'text',t:'area',label:'Objectifs (un par ligne)'}],
+    serialize:d=>fence('objectifs',A([['title',d.title||'Objectifs']]),bullets(d.text)),
+    preview:d=>`<div class="pv-obj"><div class="pv-obj-t">${esc(d.title||'Objectifs')}</div>${listHTML(d.text)}</div>` },
+  video_expert:{ label:'Vidéo expert·e',
+    fields:[{k:'title',t:'text',label:'Titre'},{k:'expert',t:'text',label:'Intervenant·e'},{k:'role',t:'text',label:'Fonction'},{k:'src',t:'text',label:'Lien vidéo (ou « à produire »)'},{k:'transcript',t:'area',label:'Transcription / script'}],
+    serialize:d=>{ const tr=(d.transcript||'').trim(); return `:::video_expert`+A([['title',d.title],['src',d.src],['expert',d.expert],['role',d.role]])+'\n'+(tr?`\n### Transcript\n${tr}\n`:'')+':::'; },
+    preview:d=>pvMedia('Vidéo expert·e','☻',d.title||(d.expert||'Capsule vidéo'),[d.role&&esc(d.role),...srcMeta(d)],d.transcript) },
+  video:{ label:'Vidéo',
+    fields:[{k:'title',t:'text',label:'Titre'},{k:'src',t:'text',label:'Lien (YouTube, Vimeo…)'},{k:'startTime',t:'text',label:'Début (mm:ss)'},{k:'endTime',t:'text',label:'Fin (mm:ss)'},{k:'body',t:'area',label:'Description / intention'}],
+    serialize:d=>fence('video',A([['src',d.src],['title',d.title],['startTime',d.startTime],['endTime',d.endTime]]),(d.body||'').trim()),
+    preview:d=>pvMedia('Vidéo','▶',d.title,srcMeta(d),d.body) },
+  audio:{ label:'Audio',
+    fields:[{k:'title',t:'text',label:'Titre'},{k:'src',t:'text',label:'Source / lien'},{k:'startTime',t:'text',label:'Début (mm:ss)'},{k:'endTime',t:'text',label:'Fin (mm:ss)'},{k:'transcript',t:'area',label:'Transcription'},{k:'body',t:'area',label:'Intention pédagogique'}],
+    serialize:d=>{ const tr=(d.transcript||'').trim(),bo=(d.body||'').trim();
+      return `:::audio`+A([['src',d.src],['title',d.title],['startTime',d.startTime],['endTime',d.endTime]])+'\n'+(bo?bo+'\n':'')+(tr?`\n### Transcript\n${tr}\n`:'')+':::'; },
+    preview:d=>pvMedia('Audio','♪',d.title,srcMeta(d),d.body||d.transcript) },
+  image:{ label:'Image',
+    fields:[{k:'src',t:'text',label:'Lien image (vide si à fournir)'},{k:'alt',t:'text',label:'Texte alternatif'},{k:'caption',t:'text',label:'Légende'},{k:'body',t:'area',label:'Description (si à produire)'}],
+    serialize:d=>{ if(d.src){ return d.caption?`![${attr(d.alt||'')}](${d.src} "${attr(d.caption)}")`:`![${attr(d.alt||'')}](${d.src})`; }
+      return fence('image',A([['alt',d.alt],['caption',d.caption]]),(d.body||'').trim()); },
+    preview:d=>{ if(d.src&&/^https?:\/\//i.test(d.src.trim())) return `<figure style="margin:14px 0"><img src="${esc(d.src)}" alt="${esc(d.alt||'')}" style="max-width:100%;border-radius:var(--radius)">${d.caption?`<figcaption class="pv-media-m" style="margin-top:4px">${esc(d.caption)}</figcaption>`:''}</figure>`;
+      return pvMedia('Image','▣',d.caption||d.alt||'Image à fournir',[],d.body); } },
+  illustration_brief:{ label:'Brief illustration',
+    fields:[{k:'title',t:'text',label:'Titre'},{k:'style',t:'text',label:'Style souhaité'},{k:'referenceUrl',t:'text',label:'Référence (URL)'},{k:'body',t:'bigarea',label:'Brief illustration'}],
+    serialize:d=>fence('illustration_brief',A([['title',d.title],['style',d.style],['referenceUrl',d.referenceUrl]]),(d.body||'').trim()),
+    preview:d=>pvCallout(d.title||'Illustration à produire',d.body,'') },
+  motion_design:{ label:'Motion design',
+    fields:[{k:'title',t:'text',label:'Titre'},{k:'repoUrl',t:'text',label:'Dépôt / lien'},{k:'duration',t:'text',label:'Durée'},{k:'body',t:'bigarea',label:'Brief motion'}],
+    serialize:d=>fence('motion_design',A([['title',d.title],['repoUrl',d.repoUrl],['duration',d.duration]]),(d.body||'').trim()),
+    preview:d=>pvCallout(d.title||'Motion design à produire',d.body,'') },
+  module_sur_mesure:{ label:'Module sur-mesure',
+    fields:[
+      {k:'title',t:'text',label:'Titre du module souhaité',ph:'Ex. Estimateur de volume de script'},
+      {k:'goal',t:'area',label:'Objectif pédagogique',ph:"À quoi doit servir cette interaction pour l'apprenant·e ?"},
+      {k:'interaction',t:'select',label:"Type d'interaction",opts:[
+        {v:'',t:'— à préciser —'},{v:'slider',t:'Curseur / slider'},{v:'dragdrop',t:'Glisser-déposer'},
+        {v:'quiz',t:'Quiz interactif'},{v:'simulation',t:'Simulation'},{v:'explore',t:'Exploration cliquable'},
+        {v:'timeline',t:'Frise / timeline'},{v:'compare',t:'Comparateur avant/après'},{v:'other',t:'Autre'}]},
+      {k:'content',t:'area',label:'Données / contenu à intégrer',ph:'Textes, valeurs, médias, exemples concrets à intégrer dans le module.'},
+      {k:'learnerFlow',t:'area',label:'Parcours apprenant·e',ph:"Ce que l'apprenant·e voit, manipule, et obtient comme retour."},
+      {k:'reference',t:'text',label:'Références / inspirations (lien)',ph:"URL d'un module similaire, maquette, exemple…"},
+      {k:'body',t:'bigarea',label:'Précisions libres pour l\'équipe interactive'}],
+    serialize:d=>{ const L=[];
+      if(d.goal&&d.goal.trim()) L.push('**Objectif pédagogique** : '+d.goal.trim());
+      if(d.interaction) L.push("**Type d'interaction** : "+(MODULE_INT_FR[d.interaction]||d.interaction));
+      if(d.content&&d.content.trim()) L.push('**Données / contenu** : '+d.content.trim());
+      if(d.learnerFlow&&d.learnerFlow.trim()) L.push('**Parcours apprenant·e** : '+d.learnerFlow.trim());
+      if(d.reference&&d.reference.trim()) L.push('**Références** : '+d.reference.trim());
+      if(d.body&&d.body.trim()) L.push(d.body.trim());
+      return fence('interactive_module',A([['title',d.title],['status','draft','raw']]),L.join('\n\n')); },
+    preview:d=>{ const L=[];
+      if(d.goal&&d.goal.trim()) L.push('**Objectif** : '+d.goal.trim());
+      if(d.interaction) L.push('**Interaction** : '+(MODULE_INT_FR[d.interaction]||d.interaction));
+      if(d.content&&d.content.trim()) L.push('**Contenu** : '+d.content.trim());
+      if(d.learnerFlow&&d.learnerFlow.trim()) L.push('**Parcours** : '+d.learnerFlow.trim());
+      if(d.reference&&d.reference.trim()) L.push('**Réf.** : '+d.reference.trim());
+      if(d.body&&d.body.trim()) L.push(d.body.trim());
+      return pvCallout((d.title?'Module sur-mesure — '+d.title:'Module interactif sur-mesure')+' (à produire)',L.join('\n\n'),''); } },
+  image_with_text:{ label:'Image + texte',
+    fields:[{k:'src',t:'text',label:'Lien image'},{k:'side',t:'select',label:'Position image',opts:[{v:'left',t:'Gauche'},{v:'right',t:'Droite'}]},{k:'body',t:'area',label:'Texte'}],
+    serialize:d=>fence('image_with_text',A([['src',d.src],['side',d.side||'left','raw']]),(d.body||'').trim()),
+    preview:d=>pvMedia('Image + texte','▤',d.src||'',[],d.body) },
+  pdf:{ label:'PDF',
+    fields:[{k:'title',t:'text',label:'Titre'},{k:'src',t:'text',label:'Lien PDF'},{k:'body',t:'area',label:'Description'}],
+    serialize:d=>fence('pdf',A([['src',d.src],['title',d.title]]),(d.body||'').trim()),
+    preview:d=>pvMedia('PDF','¶',d.title,srcMeta(d),d.body) },
+  reflection:{ label:'Réflexion',
+    fields:[{k:'title',t:'text',label:'Titre (optionnel)'},{k:'body',t:'area',label:'Question / consigne de réflexion'},{k:'feedback',t:'area',label:'Retour (optionnel)'}],
+    serialize:d=>fence('reflection',A([['title',d.title],['feedback',d.feedback]]),(d.body||'').trim()),
+    preview:d=>pvCallout(d.title||'Question de réflexion',d.body,'q') },
+  listening:{ label:'Écoute active',
+    fields:[{k:'title',t:'text',label:'Consigne / titre'},{k:'src',t:'text',label:'Extrait (lien)'},{k:'body',t:'area',label:'Question posée'}],
+    serialize:d=>fence('listening',A([['src',d.src],['title',d.title]]),(d.body||'').trim()),
+    preview:d=>pvMedia('Écoute active','♫',d.title,srcMeta(d),d.body) },
+  a_retenir:{ label:'À retenir',
+    fields:[{k:'title',t:'text',label:'Titre (optionnel)',ph:'À retenir'},{k:'text',t:'area',label:'Points clés (un par ligne)'}],
+    serialize:d=>fence('a_retenir',A([['title',d.title]]),lines(d.text).map(x=>'- takeaway: '+x).join('\n')),
+    preview:d=>`<div class="pv-retenir"><div class="pv-c-t">${esc(d.title||'À retenir')}</div>${listHTML(d.text)}</div>` },
+  resources:{ label:'Ressources',
+    fields:[{k:'title',t:'text',label:'Titre',ph:'Pour aller plus loin'},{k:'text',t:'area',label:'Ressources',hint:'Une par ligne : <code>Titre | lien | description</code>'}],
+    serialize:d=>{ let b=''; lines(d.text).forEach(ln=>{ const p=ln.split('|').map(s=>s.trim());
+        b+='- title: '+(p[0]||'')+'\n'; if(p[1]) b+='  url: '+p[1]+'\n'; if(p[2]) b+='  description: '+p[2]+'\n'; });
+      return `:::resources`+A([['title',d.title||'Ressources'],['columns','2','raw']])+'\n'+b+':::'; },
+    preview:d=>`<div class="pv-callout note"><div class="pv-c-t">${esc(d.title||'Ressources')}</div><ul class="pv-body">${lines(d.text).map(ln=>{ const p=ln.split('|').map(s=>s.trim()); const t=p[0]||''; const u=p[1];
+      return `<li>${u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`:esc(t)}${p[2]?' — '+esc(p[2]):''}</li>`; }).join('')}</ul></div>` },
+  qcm:{ label:'QCM',
+    blank:()=>({question:'',options:[{text:'',correct:false,feedback:''},{text:'',correct:true,feedback:''}],explanation:''}),
+    edit:(d,id)=>editChoices(d,id,false),
+    serialize:d=>{ let b=(d.question||'').trim(); const ch=(d.options||[]);
+      if(b&&ch.length) b+='\n'; ch.forEach(o=>{ b+=`\n- [${o.correct?'x':' '}] ${o.text||''}`; if(o.feedback&&o.feedback.trim()) b+=`\n  > ${o.feedback.trim()}`; });
+      return `:::qcm`+A([['explanation',d.explanation]])+'\n'+b.trim()+'\n:::'; },
+    preview:d=>pvChoices(d,false) },
+  qcu:{ label:'Choix unique',
+    blank:()=>({question:'',options:[{text:'',correct:true,feedback:''},{text:'',correct:false,feedback:''}]}),
+    edit:(d,id)=>editChoices(d,id,true),
+    serialize:d=>{ let b=''; (d.options||[]).forEach(o=>{ b+=`\n- [${o.correct?'x':' '}] ${o.text||''}`; if(o.feedback&&o.feedback.trim()) b+=`\n  > ${o.feedback.trim()}`; });
+      return `:::qcu`+A([['question',d.question]])+'\n'+b.trim()+'\n:::'; },
+    preview:d=>pvChoices(d,true) },
+  truefalse:{ label:'Vrai / Faux',
+    fields:[{k:'question',t:'area',label:'Affirmation'},{k:'answer',t:'select',label:'Réponse',opts:[{v:'true',t:'Vrai'},{v:'false',t:'Faux'}]},{k:'feedback',t:'area',label:'Retour (optionnel)'}],
+    serialize:d=>`:::truefalse`+A([['question',d.question],['answer',d.answer==='false'?'false':'true','raw']])+'\n:::',
+    preview:d=>`<div class="pv-qcm"><div class="pv-q">${esc(d.question||'Affirmation')}</div><div class="pv-media-m">Réponse : ${d.answer==='false'?'Faux':'Vrai'}</div>${d.feedback?`<div class="pv-global show">${mdInline(d.feedback)}</div>`:''}</div>` },
+  assessment:{ label:'Évaluation',
+    blank:()=>({title:'',maxAttempts:'',questions:[blankQuestion()]}),
+    edit:(d,id)=>editAssessment(d,id),
+    serialize:d=>serializeQuestions(d,'assessment'),
+    preview:d=>previewQuestions(d) },
+  quiz_final:{ label:'Quiz final',
+    blank:()=>({title:'',maxAttempts:'',questions:[blankQuestion()]}),
+    edit:(d,id)=>editAssessment(d,id),
+    serialize:d=>serializeQuestions(d,'quiz_final'),
+    preview:d=>previewQuestions(d) },
+};
+// Complète les blank() manquants à partir des fields.
+Object.keys(BLOCKDEFS).forEach(k=>{ const def=BLOCKDEFS[k]; if(!def.blank) def.blank=()=>blankFromFields(def); });
+
+// — Carte d'un bloc dans l'éditeur —
+function blockCard(b,i,total){
+  const def=BLOCKDEFS[b.type]||BLOCKDEFS.paragraph;
+  const body= def.edit? def.edit(b.data,b.id) : editGeneric(def,b.data);
+  return `<div class="card blk" data-blk="${b.id}">
+    <div class="card-head">
+      <span class="ctag"><span class="blk-ic">${ICON(b.type)}</span> ${esc(def.label||b.type)}</span>
+      <div class="blk-actions">
+        <button class="ico-btn" title="Monter" onclick="moveBlock('${b.id}',-1)" ${i===0?'disabled':''}>▲</button>
+        <button class="ico-btn" title="Descendre" onclick="moveBlock('${b.id}',1)" ${i===total-1?'disabled':''}>▼</button>
+        <button class="btn btn--danger btn--sm" onclick="removeBlock('${b.id}')">Retirer</button>
+      </div>
+    </div>
+    ${body}
+  </div>`;
+}
+// — Palette d'insertion, groupée par intention pédagogique —
+function blockPalette(){
+  const C=window.BlockCatalog;
+  const ids=(C&&C.EXPERT_IDS)?C.EXPERT_IDS.filter(id=>BLOCKDEFS[id]):Object.keys(BLOCKDEFS);
+  const groups={}; ids.forEach(id=>{ const intent=(C&&C.byId(id)&&C.byId(id).intent)||'structure'; (groups[intent]=groups[intent]||[]).push(id); });
+  const INT=(C&&C.INTENTS)||{}; const order=['structure','present','hook','practise','memorise','assess'];
+  let h=`<div class="palette" id="palette" hidden>`;
+  h+=`<input class="pal-search" id="palSearch" type="text" placeholder="Rechercher un bloc…" oninput="filterPalette(this.value)" autocomplete="off">`;
+  h+=`<div class="pal-list">`;
+  order.forEach(intent=>{ const list=groups[intent]; if(!list||!list.length) return;
+    const meta=INT[intent]||{color:'#6b7280'};
+    h+=`<div class="pal-group"><div class="pal-h"><span class="pal-dot" style="background:${meta.color}"></span>${esc(FAM_FR[intent]||intent)}</div>`;
+    list.forEach(id=>{ const def=BLOCKDEFS[id]; const desc=(C&&C.descOf(id))||'';
+      const key=((def.label||'')+' '+desc+' '+id).toLowerCase();
+      h+=`<button class="pal-btn" data-k="${esc(key)}" onclick="addBlock('${id}')" title="${esc(desc)}"><span class="pal-ic">${ICON(id)}</span><span>${esc(def.label)}</span></button>`; });
+    h+=`</div>`;
+  });
+  h+=`<div class="pal-empty" hidden>Aucun bloc ne correspond.</div>`;
+  return h+`</div></div>`;
+}
+
+/* ---------- Vue : Conclusion ---------- */
+function viewConclusion(){
+  return `
+  <div class="crumb">Conclusion</div>
+  <h1 class="page">Conclusion du cours</h1>
+  <div class="field"><label class="lab">Bilan général</label>
+    <div class="hint">Le fil rouge du cours, ce que l'apprenant·e a acquis, ouverture vers la pratique ou la suite.</div>
+    <textarea class="txt big" data-c="text" placeholder="Votre conclusion…">${esc(state.conclusion.text)}</textarea></div>
+  <h2 class="sec">L'essentiel à retenir</h2>
+  <div class="hint">Les idées-force du cours, une par ligne.</div>
+  <div class="field"><textarea class="txt" data-c="essentiel" placeholder="Idée-force 1
+Idée-force 2">${esc(state.conclusion.essentiel)}</textarea></div>
+  `;
+}
+
+/* ============================================================
+   BINDINGS (après chaque renderWork)
+   ============================================================ */
+function bindWork(){
+  const w=document.getElementById('work');
+  // meta
+  w.querySelectorAll('[data-m]').forEach(el=>el.addEventListener('input',e=>{ state.meta[el.dataset.m]=e.target.value; markDirty(); }));
+  // intro
+  w.querySelectorAll('[data-i]').forEach(el=>el.addEventListener('input',e=>{ state.intro[el.dataset.i]=e.target.value; markDirty(); }));
+  // conclusion
+  w.querySelectorAll('[data-c]').forEach(el=>el.addEventListener('input',e=>{ state.conclusion[el.dataset.c]=e.target.value; markDirty(); }));
+  // part
+  const p=findPart(selected.partId);
+  w.querySelectorAll('[data-part]').forEach(el=>el.addEventListener('input',e=>{
+    p[el.dataset.part]=e.target.value; markDirty();
+    if(el.dataset.part==='title') renderSidebar();
+  }));
+  // lesson
+  const L=selected.type==='lesson'? findLesson(selected.partId,selected.lessonId):null;
+  if(L){
+    w.querySelectorAll('[data-l]').forEach(el=>el.addEventListener('input',e=>{
+      const k=el.dataset.l; L[k]= (k==='durationMin')? e.target.value : e.target.value;
+      markDirty(); refreshBadge(L);
+      if(k==='title') renderSidebar();
+      if(k==='durationMin') updateGauge(L);
+      else updateGauge(L);
+    }));
+    // blocs (éditeur unifié)
+    w.querySelectorAll('[data-blk]').forEach(card=>{
+      const b=L.blocks.find(x=>x.id===card.dataset.blk); if(!b) return;
+      const d=b.data;
+      // champs simples (générique + custom)
+      card.querySelectorAll('[data-bf]').forEach(el=>{
+        const ev=el.tagName==='SELECT'?'change':'input';
+        el.addEventListener(ev,e=>{ d[el.dataset.bf]= el.type==='checkbox'? e.target.checked : e.target.value; markDirty(); refreshBadge(L); updateGauge(L); });
+      });
+      // réponses des QCM / choix unique
+      card.querySelectorAll('[data-optb]').forEach(row=>{
+        const i=Number(row.dataset.optb); const o=d.options[i]; if(!o) return;
+        const single=b.type==='qcu';
+        const ck=row.querySelector('[data-ob-correct]'); if(ck) ck.addEventListener('change',e=>{
+          if(single) d.options.forEach(x=>x.correct=false);
+          o.correct=e.target.checked; markDirty(); if(single) renderWork(); else row.classList.toggle('is-correct',e.target.checked);
+        });
+        const tx=row.querySelector('[data-ob-text]'); if(tx) tx.addEventListener('input',e=>{ o.text=e.target.value; markDirty(); refreshBadge(L); });
+        const fb=row.querySelector('[data-ob-fb]'); if(fb) fb.addEventListener('input',e=>{ o.feedback=e.target.value; markDirty(); });
+        const rm=row.querySelector('[data-rmopt]'); if(rm) rm.addEventListener('click',()=>{ d.options.splice(i,1); markDirty(); renderWork(); });
+      });
+      // questions des évaluations
+      card.querySelectorAll('[data-qcard]').forEach(qc=>{
+        const qi=Number(qc.dataset.qcard); const q=d.questions[qi]; if(!q) return;
+        qc.querySelectorAll('[data-qf]').forEach(el=>{
+          const ev=el.tagName==='SELECT'?'change':'input';
+          el.addEventListener(ev,e=>{ q[el.dataset.qf]=e.target.value; markDirty(); refreshBadge(L); if(el.dataset.qf==='type') renderWork(); });
+        });
+      });
+    });
+  }
+}
+
+// Jauge compacte de la toolbar — visible uniquement en édition de chapitre.
+function syncBarGauge(){
+  const bg=document.getElementById('barGauge'); if(!bg) return;
+  const L=(selected.type==='lesson')? curLesson() : null;
+  if(!L){ bg.hidden=true; return; }
+  bg.hidden=false;
+  const c=lessonWordCount(L); const [lo,hi]=targetRange(L.durationMin); const [eLo,eHi]=estLearnerTime(c);
+  const pct=Math.min(100, hi? Math.round(c/hi*100):0);
+  let cls='', verdict;
+  if(c===0) verdict='Commencez à rédiger : le temps apprenant estimé s\'affiche à mesure.';
+  else if(c<lo) verdict=`Visez ~${L.durationMin} min (au moins ${fmt(lo)} mots).`;
+  else if(c<=hi){ cls='ok'; verdict='Pile dans la cible du chapitre. 👌'; }
+  else { cls='over'; verdict='Riche — c\'est très bien ! Nous raccourcirons si besoin.'; }
+  document.getElementById('bgTxt').innerHTML=`≈ <b>${eLo}–${eHi} min</b> · ${fmt(c)} mots`;
+  const fill=document.getElementById('bgFill'); fill.style.width=pct+'%'; fill.className='bg-fill '+cls;
+  bg.title=`${verdict} — cible ${L.durationMin} min (${fmt(lo)}–${fmt(hi)} mots).`;
+}
+// Conservé pour les appels existants (saisie, durée) : alimente la jauge toolbar.
+function updateGauge(L){ syncBarGauge(); }
+/* ============================================================
+   ACTIONS STRUCTURELLES
+   ============================================================ */
+function addPart(){ state.parts.push(blankPart(state.parts.length+1)); markDirty(); const p=state.parts[state.parts.length-1]; select({type:'part',partId:p.id}); }
+function removePart(id){ if(!confirm('Supprimer cette partie et tous ses chapitres ?'))return; state.parts=state.parts.filter(p=>p.id!==id); selected={type:'intro'}; markDirty(); render(); }
+function addLesson(pid){ const p=findPart(pid); const L=blankLesson(p.lessons.length+1); p.lessons.push(L); markDirty(); select({type:'lesson',partId:pid,lessonId:L.id}); }
+function removeLesson(pid,lid){ if(!confirm('Supprimer ce chapitre ?'))return; const p=findPart(pid); p.lessons=p.lessons.filter(l=>l.id!==lid); selected={type:'part',partId:pid}; markDirty(); render(); }
+function curLesson(){ return findLesson(selected.partId,selected.lessonId); }
+function curBlock(id){ const L=curLesson(); return L? (L.blocks||[]).find(b=>b.id===id):null; }
+let _palOutside=null;
+function _palEsc(e){ if(e.key==='Escape') closePalette(); }
+function openPalette(){
+  const p=document.getElementById('palette'), t=document.getElementById('paletteToggle');
+  if(!p) return; p.removeAttribute('hidden'); if(t) t.classList.add('is-open');
+  const s=document.getElementById('palSearch'); if(s){ s.value=''; filterPalette(''); setTimeout(()=>s.focus(),0); }
+  _palOutside=e=>{ if(!e.target.closest('.palette-wrap')) closePalette(); };
+  document.addEventListener('mousedown',_palOutside);
+  document.addEventListener('keydown',_palEsc);
+}
+function closePalette(){
+  const p=document.getElementById('palette'), t=document.getElementById('paletteToggle');
+  if(p) p.setAttribute('hidden',''); if(t) t.classList.remove('is-open');
+  if(_palOutside){ document.removeEventListener('mousedown',_palOutside); _palOutside=null; }
+  document.removeEventListener('keydown',_palEsc);
+}
+function togglePalette(){
+  const p=document.getElementById('palette'); if(!p) return;
+  if(p.hasAttribute('hidden')) openPalette(); else closePalette();
+}
+function filterPalette(q){
+  const pop=document.getElementById('palette'); if(!pop) return;
+  q=(q||'').trim().toLowerCase(); let any=false;
+  pop.querySelectorAll('.pal-btn').forEach(b=>{ const hit=!q||(b.dataset.k||'').includes(q); b.hidden=!hit; if(hit) any=true; });
+  pop.querySelectorAll('.pal-group').forEach(g=>{ g.hidden=![...g.querySelectorAll('.pal-btn')].some(b=>!b.hidden); });
+  const empty=pop.querySelector('.pal-empty'); if(empty) empty.hidden=any;
+}
+function addBlock(type){ const L=curLesson(); if(!L) return; closePalette(); L.blocks=L.blocks||[];
+  L.blocks.push(blankBlock(type)); markDirty(); renderWork(); refreshBadge(L);
+  const cards=document.querySelectorAll('#blocks .blk'); const last=cards[cards.length-1];
+  if(last){ last.scrollIntoView({block:'center',behavior:'smooth'}); const f=last.querySelector('.txt'); if(f) f.focus(); }
+}
+function removeBlock(id){ const L=curLesson(); L.blocks=L.blocks.filter(b=>b.id!==id); markDirty(); renderWork(); refreshBadge(L); }
+function moveBlock(id,dir){ const L=curLesson(); const i=L.blocks.findIndex(b=>b.id===id); const j=i+dir;
+  if(i<0||j<0||j>=L.blocks.length) return; const t=L.blocks[i]; L.blocks[i]=L.blocks[j]; L.blocks[j]=t; markDirty(); renderWork(); }
+function addOptB(id){ const b=curBlock(id); if(!b) return; b.data.options=b.data.options||[]; b.data.options.push({text:'',correct:false,feedback:''}); markDirty(); renderWork(); }
+function addQ(id){ const b=curBlock(id); if(!b) return; b.data.questions=b.data.questions||[]; b.data.questions.push(blankQuestion()); markDirty(); renderWork(); }
+function removeQ(id,i){ const b=curBlock(id); if(!b) return; b.data.questions.splice(i,1); markDirty(); renderWork(); }
+
+/* ============================================================
+   EXPORT — MD ScormStack
+   ============================================================ */
+function lines(s){ return String(s||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean); }
+function attr(s){ return String(s||'').replace(/"/g,'’'); } // " → ' typographique pour ne pas casser les attrs
+function md(){
+  const m=state.meta; let out='';
+  out+=`---\ntitle: "${attr(m.title)}"\nauthors: "${attr(m.authors)}"\npublic: "${attr(m.public)}"\nduration: "${attr(m.duration)}"\ndate: "${m.date}"\nversion: 1\nstatus: "draft"\n---\n\n`;
+  out+=`<!-- Brief rédigé via l'Atelier de rédaction CNSMDP. À ouvrir dans l'éditeur ScormStack. -->\n\n`;
+
+  // Intro
+  out+=`:::slide_intro {title="${attr(m.title)}"}\n:::\n\n`;
+  if(state.intro.intentions) out+=state.intro.intentions.trim()+'\n\n';
+  const io=lines(state.intro.objectives);
+  if(io.length){ out+=`:::objectifs {title="Objectifs du cours"}\n`+io.map(o=>'- '+o).join('\n')+`\n:::\n\n`; }
+  if(state.parts.length){ out+=`:::plan {title="Plan"}\n`+state.parts.map((p,i)=>'- '+(p.title||('Partie '+(i+1)))).join('\n')+`\n:::\n\n`; }
+  if(state.intro.prerequis){ out+=`:::callout {type=info title="Public et prérequis"}\n${state.intro.prerequis.trim()}\n:::\n\n`; }
+  out+=`:::slide_break\n:::\n\n`;
+
+  // Parts & lessons
+  state.parts.forEach((p,pi)=>{
+    out+=`# Partie ${pi+1} — ${p.title||''}\n\n`;
+    if(p.intention) out+=p.intention.trim()+'\n\n';
+    p.lessons.forEach(L=>{
+      out+=`## ${L.title||'Chapitre'}\n`;
+      const _et=estLearnerTime(lessonWordCount(L));
+      out+=`<!-- Chapitre · durée visée : ${L.durationMin} min · script saisi : ${lessonWordCount(L)} mots (≈ ${_et[0]}–${_et[1]} min apprenant)${L.prereq?(' · prérequis : '+L.prereq):''} -->\n\n`;
+      const lo=lines(L.objectives);
+      if(lo.length){ out+=`:::objectifs {title="Objectifs du chapitre"}\n`+lo.map(o=>'- '+o).join('\n')+`\n:::\n\n`; }
+      (L.blocks||[]).forEach(b=>{
+        const def=BLOCKDEFS[b.type]; if(!def) return;
+        const s=def.serialize(b.data||{});
+        if(s && s.trim()) out+=s.trim()+'\n\n';
+      });
+      if(L.notes){ out+=`<!-- Notes pour l'équipe : ${L.notes.replace(/\n/g,' ')} -->\n\n`; }
+      out+=`:::slide_break\n:::\n\n`;
+    });
+  });
+
+  // Conclusion
+  out+=`# Conclusion\n\n`;
+  if(state.conclusion.text) out+=state.conclusion.text.trim()+'\n\n';
+  const es=lines(state.conclusion.essentiel);
+  if(es.length){ out+=`:::a_retenir\n`+es.map(x=>'- '+x).join('\n')+`\n:::\n\n`; }
+  out+=`:::navigation_button\n:::\n`;
+  return out;
+}
+
+/* ============================================================
+   APERÇU — vue approximative côté apprenant·e
+   ============================================================ */
+let pvQ=0;
+
+function mdInline(s){
+  return esc(s).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>');
+}
+function mdBlock(s){
+  if(!s||!s.trim()) return '';
+  return s.trim().split(/\n{2,}/).map(blk=>{
+    const t=blk.trim();
+    if(/^###\s+/.test(t)) return `<div class="pv-h3">${mdInline(t.replace(/^###\s+/,''))}</div>`;
+    if(/^##\s+/.test(t)) return `<div class="pv-h3">${mdInline(t.replace(/^##\s+/,''))}</div>`;
+    if(t.split('\n').every(l=>/^\s*[-*]\s+/.test(l))){
+      return '<ul>'+t.split('\n').map(l=>`<li>${mdInline(l.replace(/^\s*[-*]\s+/,''))}</li>`).join('')+'</ul>';
+    }
+    return `<p>${mdInline(t).replace(/\n/g,'<br>')}</p>`;
+  }).join('');
+}
+function listHTML(s){ const ls=lines(s); return ls.length?('<ul>'+ls.map(x=>`<li>${mdInline(x)}</li>`).join('')+'</ul>'):''; }
+
+function renderPreview(){
+  pvQ=0;
+  const m=state.meta;
+  let h='<div class="pv-doc">';
+  h+=`<h1>${esc(m.title||'Cours sans titre')}</h1>`;
+  const metaBits=[m.authors,m.public,m.duration].filter(Boolean).map(esc).join(' · ');
+  if(metaBits) h+=`<div class="pv-meta">${metaBits}</div>`;
+  if(state.intro.intentions) h+=`<div class="pv-lead">${mdBlock(state.intro.intentions)}</div>`;
+  const io=lines(state.intro.objectives);
+  if(io.length) h+=`<div class="pv-obj"><div class="pv-obj-t">Objectifs du cours</div>${listHTML(state.intro.objectives)}</div>`;
+  if(state.parts.length) h+=`<div class="pv-obj"><div class="pv-obj-t">Plan</div><ul>${state.parts.map((p,i)=>`<li>${esc(p.title||('Partie '+(i+1)))}</li>`).join('')}</ul></div>`;
+  if(state.intro.prerequis) h+=`<div class="pv-callout info"><div class="pv-c-t">Public et prérequis</div><div class="pv-body">${mdBlock(state.intro.prerequis)}</div></div>`;
+
+  let hasContent=state.parts.some(p=>p.lessons.length);
+  state.parts.forEach((p,pi)=>{
+    h+=`<div class="pv-part"><div class="pv-part-k">Partie ${pi+1}</div><div class="pv-part-t">${esc(p.title||'')}</div></div>`;
+    if(p.intention) h+=`<div class="pv-lead">${mdBlock(p.intention)}</div>`;
+    p.lessons.forEach(L=>{
+      h+=`<div class="pv-lesson"><div class="pv-lesson-h"><span class="pv-lesson-t">${esc(L.title||'Chapitre')}</span>`+
+         `<span class="pv-chip">${esc(L.durationMin||0)} min</span></div>`;
+      const lo=lines(L.objectives);
+      if(lo.length) h+=`<div class="pv-obj"><div class="pv-obj-t">Objectifs du chapitre</div>${listHTML(L.objectives)}</div>`;
+      (L.blocks||[]).forEach(b=>{ const def=BLOCKDEFS[b.type]; if(!def) return; h+=def.preview(b.data||{})||''; });
+      h+=`</div>`;
+    });
+  });
+
+  if(state.conclusion.text || lines(state.conclusion.essentiel).length){
+    h+=`<div class="pv-part"><div class="pv-part-t">Conclusion</div></div>`;
+    if(state.conclusion.text) h+=`<div class="pv-body">${mdBlock(state.conclusion.text)}</div>`;
+    const es=lines(state.conclusion.essentiel);
+    if(es.length) h+=`<div class="pv-retenir"><div class="pv-c-t">L'essentiel</div>${listHTML(state.conclusion.essentiel)}</div>`;
+  }
+
+  if(!state.intro.intentions && !io.length && !hasContent) h='<div class="pv-empty">Commencez à rédiger : l\'aperçu se construira au fur et à mesure.</div>';
+  else h+='</div>';
+  return h;
+}
+
+function bindPreview(){
+  document.querySelectorAll('#previewBody [data-pv-opt]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const correct=btn.dataset.correct==='1';
+      btn.classList.add(correct?'correct':'wrong');
+      const fbId=btn.dataset.fb;
+      if(fbId){ const fb=document.getElementById('fb-'+fbId); if(fb) fb.classList.add('show'); }
+      const qcm=btn.closest('.pv-qcm');
+      const g=qcm&&qcm.querySelector('.pv-global'); if(g) g.classList.add('show');
+    });
+  });
+}
+
+function openPreview(){
+  document.getElementById('previewBody').innerHTML=renderPreview();
+  document.getElementById('previewOverlay').classList.add('show');
+  document.querySelector('#previewOverlay .pv-scroll').scrollTop=0;
+  bindPreview();
+}
+function closePreview(){ document.getElementById('previewOverlay').classList.remove('show'); }
+
+function openExport(){ document.getElementById('exportPreview').textContent=md(); document.getElementById('exportOverlay').classList.add('show'); }
+function closeExport(){ document.getElementById('exportOverlay').classList.remove('show'); }
+function downloadExport(){ const blob=new Blob([md()],{type:'text/markdown'}); triggerDownload(blob, slug(state.meta.title)+'.md'); toast('Fichier téléchargé'); }
+function copyExport(){ navigator.clipboard.writeText(md()).then(()=>toast('Copié dans le presse-papier')); }
+
+/* ============================================================
+   UTILS
+   ============================================================ */
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+let toastTimer=null;
+function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),2200); }
+document.getElementById('exportOverlay').addEventListener('click',e=>{ if(e.target.id==='exportOverlay') closeExport(); });
+document.getElementById('previewOverlay').addEventListener('click',e=>{ if(e.target.id==='previewOverlay') closePreview(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeExport(); closePreview(); } });
+
+/* ============================================================
+   TOOLBAR FIXE — mise en forme du champ en cours d'édition
+   Insère de la grammaire Markdown dans le textarea/.txt actif.
+   ============================================================ */
+const FMT_BTNS=[
+  {act:'bold',   html:'<b>G</b>',                    title:'Gras  **…**'},
+  {act:'italic', html:'<i>I</i>',                    title:'Italique  *…*'},
+  {act:'code',   html:'&lt;/&gt;',                   title:'Code  `…`'},
+  {act:'link',   html:'🔗',                          title:'Lien  [texte](url)'},
+  {act:'sep'},
+  {act:'h2',     html:'H<span class="sub">2</span>', title:'Titre  ## …'},
+  {act:'h3',     html:'H<span class="sub">3</span>', title:'Sous-titre  ### …'},
+  {act:'ul',     html:'•',                           title:'Liste à puces  - …'},
+  {act:'ol',     html:'1.',                          title:'Liste numérotée  1. …'},
+  {act:'quote',  html:'❝',                           title:'Citation  > …'},
+  {act:'sep'},
+  {act:'math',   html:'ƒ<span class="sub">x</span>', title:'Formule  $…$ (LaTeX)'},
+  {act:'sep'},
+  {act:'dictate',html:'🎙',                          title:'Dictée vocale — parlez, le texte s\'écrit', cls:'dictate'},
+];
+let fmtTarget=null, editBar=null;
+function isEditable(el){ return el && el.classList && el.classList.contains('txt') && (el.tagName==='TEXTAREA'||el.tagName==='INPUT'); }
+function initFmtBar(){
+  editBar=document.getElementById('editbar');
+  editBar.innerHTML=`<div class="editbar-inner">`+FMT_BTNS.map(b=> b.act==='sep'
+    ? '<span class="sep"></span>'
+    : `<button type="button" class="fmtbtn${b.cls?' '+b.cls:''}" data-fmt="${b.act}" title="${b.title}" aria-label="${b.title}">${b.html}</button>`).join('')+
+    `<div class="bar-gauge" id="barGauge" hidden><span class="bg-txt" id="bgTxt"></span><span class="bg-bar"><span class="bg-fill" id="bgFill"></span></span></div>`+
+    `</div>`;
+  editBar.addEventListener('mousedown',e=>{ if(e.target.closest('.fmtbtn')) e.preventDefault(); }); // garder la sélection
+  editBar.addEventListener('click',e=>{ const b=e.target.closest('[data-fmt]'); if(b) applyFmt(b.dataset.fmt); });
+  document.addEventListener('focusin',e=>{ if(isEditable(e.target)){ fmtTarget=e.target; editBar.classList.add('armed'); } });
+}
+function applyFmt(act){
+  if(act==='dictate'){ return toggleDictation(); }
+  if(!fmtTarget || !isEditable(fmtTarget)){ toast('Cliquez d\'abord dans un champ de texte'); return; }
+  switch(act){
+    case 'bold':   return fmtWrap('**','texte en gras');
+    case 'italic': return fmtWrap('*','texte en italique');
+    case 'code':   return fmtWrap('`','code');
+    case 'math':   return fmtWrap('$','x^2');
+    case 'link':   return fmtLink();
+    case 'h2':     return fmtLine('## ');
+    case 'h3':     return fmtLine('### ');
+    case 'ul':     return fmtLine('- ');
+    case 'ol':     return fmtLine('1. ');
+    case 'quote':  return fmtLine('> ');
+  }
+}
+function fmtFire(ta){ ta.focus(); ta.dispatchEvent(new Event('input',{bubbles:true})); }
+function fmtWrap(mk,ph){
+  const ta=fmtTarget, s=ta.selectionStart, e=ta.selectionEnd, v=ta.value;
+  const sel=v.slice(s,e)||ph;
+  ta.value=v.slice(0,s)+mk+sel+mk+v.slice(e);
+  const a=s+mk.length; ta.setSelectionRange(a,a+sel.length); fmtFire(ta);
+}
+function fmtLink(){
+  const ta=fmtTarget, s=ta.selectionStart, e=ta.selectionEnd, v=ta.value;
+  const sel=v.slice(s,e)||'texte';
+  const ins='['+sel+'](url)';
+  ta.value=v.slice(0,s)+ins+v.slice(e);
+  const us=s+sel.length+3; ta.setSelectionRange(us,us+3); fmtFire(ta); // sélectionne "url"
+}
+function fmtLine(pfx){
+  const ta=fmtTarget; if(ta.tagName==='INPUT'){ toast('Mise en forme de ligne réservée aux zones de texte'); return; }
+  const v=ta.value, s=ta.selectionStart, e=ta.selectionEnd;
+  const ls=v.lastIndexOf('\n',s-1)+1; let le=v.indexOf('\n',e); if(le===-1) le=v.length;
+  const rows=v.slice(ls,le).split('\n');
+  const allHave=rows.every(l=>l.startsWith(pfx));
+  const out=rows.map(l=> allHave ? l.slice(pfx.length) : pfx+l).join('\n');
+  ta.value=v.slice(0,ls)+out+v.slice(le);
+  ta.setSelectionRange(ls,ls+out.length); fmtFire(ta);
+}
+
+/* ============================================================
+   DICTÉE VOCALE — Web Speech API (aucune dépendance)
+   Insère le texte dicté à la position du curseur dans le champ
+   actif (fmtTarget). Bascule marche/arrêt sur le bouton 🎙.
+   ============================================================ */
+let dictation=null;
+function speechSupported(){ return ('webkitSpeechRecognition' in window) || ('SpeechRecognition' in window); }
+
+/* Convertit les commandes vocales de ponctuation (« virgule », « point »,
+   « à la ligne »…) en signes réels. Les commandes à plusieurs mots sont
+   traitées avant les commandes simples. Espacement typographique FR ensuite. */
+function dictPunct(s){
+  if(!s) return s;
+  let t=' '+s+' ';
+  // Sauts de ligne → sentinelles (pour ne pas être absorbés par les espaces
+  // des règles suivantes). \b échoue devant « à » (non-ASCII) : on ancre alors
+  // sur l'espace (?:^|\s). Les variantes les plus longues passent en premier.
+  const NL='@@NL@@', PP='@@PP@@';
+  t=t.replace(/\s*\bnouveau paragraphe\b\s*/gi, PP);
+  t=t.replace(/\s*\bretour (?:à|a) la ligne\b\s*/gi, NL);
+  t=t.replace(/(?:^|\s)(?:à|a) la ligne\b\s*/gi, NL);
+  t=t.replace(/\s*\bnouvelle ligne\b\s*/gi, NL);
+  const rules=[
+    [/\s*\bpoints? d['’]interrogation\b\s*/gi, '? '],
+    [/\s*\bpoints? d['’]exclamation\b\s*/gi, '! '],
+    [/\s*\bpoints? de suspension\b\s*/gi, '… '],
+    [/\s*\bpoint[- ]virgule\b\s*/gi, '; '],
+    [/\s*\bdeux[- ]points\b\s*/gi, ' : '],
+    [/\s*\bouvre[zr]? (?:la |les )?parenthèses?\b\s*/gi, ' ('],
+    [/\s*\bferme[zr]? (?:la |les )?parenthèses?\b\s*/gi, ') '],
+    [/\s*\bouvre[zr]? (?:les )?guillemets?\b\s*/gi, ' « '],
+    [/\s*\bferme[zr]? (?:les )?guillemets?\b\s*/gi, ' » '],
+    [/\s*\bvirgule\b\s*/gi, ', '],
+    [/\s*\bpoint\b\s*/gi, '. '],
+    [/\s*\bapostrophe\b\s*/gi, '’'],
+    [/\s*\btirets?\b\s*/gi, '-'],
+  ];
+  rules.forEach(([re,rep])=>{ t=t.replace(re,rep); });
+  t=t.replace(/[ \t]+([,.;!?…)»])/g, '$1');      // pas d'espace avant , . ; ! ? … ) »
+  t=t.replace(/([(«’-])[ \t]+/g, '$1');           // pas d'espace après ( « ’ -
+  t=t.replace(/[ \t]{2,}/g, ' ');                 // espaces multiples
+  t=t.replace(/[ \t]*@@PP@@[ \t]*/g, '\n\n');     // sentinelle paragraphe
+  t=t.replace(/[ \t]*@@NL@@[ \t]*/g, '\n');       // sentinelle saut de ligne
+  t=t.replace(/^[ \t]+/, '');                      // pas d'espace de tête (séparateur géré à l'insertion)
+  // Majuscule en début et après . ! ? … et sauts de ligne
+  t=t.replace(/(^|[.!?…]\s+|\n+)([a-zà-ÿ])/g, (m,pre,ch)=>pre+ch.toUpperCase());
+  return t;
+}
+function setDictateUI(on){
+  const btn=document.querySelector('.fmtbtn.dictate'); if(btn) btn.classList.toggle('rec',!!on);
+}
+function toggleDictation(){
+  if(dictation){ stopDictation(); return; }
+  if(!speechSupported()){ toast('La dictée vocale n\'est pas disponible ici — essayez Google Chrome.'); return; }
+  if(!fmtTarget || !isEditable(fmtTarget)){ toast('Cliquez d\'abord dans un champ de texte, puis lancez la dictée.'); return; }
+  const ta=fmtTarget;
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  const rec=new SR();
+  rec.lang='fr-FR'; rec.continuous=true; rec.interimResults=true;
+  dictation={ rec, ta,
+    head: ta.value.slice(0, ta.selectionStart),
+    tail: ta.value.slice(ta.selectionEnd),
+    final:'', active:true };
+  rec.onresult=(e)=>{
+    if(!dictation) return;
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      if(r.isFinal) dictation.final += r[0].transcript;
+      else interim += r[0].transcript;
+    }
+    const spoken=dictPunct(dictation.final+interim);
+    const sep=(dictation.head && /\S$/.test(dictation.head) && spoken && !/^\s/.test(spoken)) ? ' ' : '';
+    const left=dictation.head+sep+spoken;
+    dictation.ta.value=left+dictation.tail;
+    try{ dictation.ta.setSelectionRange(left.length,left.length); }catch(_){}
+    dictation.ta.dispatchEvent(new Event('input',{bubbles:true}));
+  };
+  rec.onerror=(e)=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed') toast('Microphone refusé — autorisez-le pour dicter.');
+    else if(e.error==='no-speech') return; // silence : on laisse onend relancer
+    else toast('Dictée interrompue ('+e.error+').');
+    stopDictation();
+  };
+  rec.onend=()=>{
+    // Chrome arrête après un silence : on relance tant que l'utilisateur n'a pas stoppé.
+    if(dictation && dictation.active){ try{ rec.start(); return; }catch(_){} }
+    finishDictation();
+  };
+  try{ rec.start(); }catch(_){ finishDictation(); return; }
+  setDictateUI(true);
+  toast('Dictée en cours — parlez. Recliquez sur 🎙 pour arrêter.');
+}
+function stopDictation(){ if(!dictation) return; dictation.active=false; try{ dictation.rec.stop(); }catch(_){} }
+function finishDictation(){
+  const ta=dictation && dictation.ta;
+  dictation=null; setDictateUI(false);
+  if(ta){ try{ ta.focus(); }catch(_){} ta.dispatchEvent(new Event('input',{bubbles:true})); }
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+initFmtBar(); restore(); render(); setSaveState('Prêt');
+</script>
+</body>
+</html>
