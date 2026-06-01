@@ -1038,6 +1038,44 @@ function editChoices(d,id,single){
       <textarea class="txt" data-bf="explanation" placeholder="Synthèse affichée quelle que soit la réponse.">${esc(d.explanation)}</textarea></div>`}`;
 }
 
+// — QCM multi-questions —
+// Lecteur tolérant : renvoie data.questions[] s'il existe, sinon synthétise une
+// question unique depuis l'ancien modèle plat {question, options}. NE MUTE PAS.
+function qcmQuestions(d){
+  if(Array.isArray(d.questions)&&d.questions.length) return d.questions;
+  return [{question:d.question||'',options:d.options||[]}];
+}
+function optRowQ(o,qi,oi){
+  return `<div class="opt-row ${o.correct?'is-correct':''}" data-qmo="${oi}">
+    <div class="correct-wrap"><input type="checkbox" data-qmo-correct ${o.correct?'checked':''}><small>juste</small></div>
+    <div class="opt-fields">
+      <input class="txt" data-qmo-text value="${esc(o.text)}" placeholder="Réponse ${oi+1}">
+      <textarea class="txt" data-qmo-fb placeholder="Retour si cette réponse est choisie…" style="margin-top:6px;min-height:50px">${esc(o.feedback)}</textarea>
+    </div>
+    <button class="btn btn--danger btn--sm" data-rmqo title="Retirer cette réponse">×</button>
+  </div>`;
+}
+function editChoicesQcm(d,id){
+  // Migre l'ancien modèle plat {question, options} vers questions[] dès l'ouverture
+  // de l'éditeur, pour que le binding ait un d.questions réel à muter.
+  const qs=qcmNorm(d); const multi=qs.length>1;
+  const cards=qs.map((q,qi)=>`
+    <div class="qcm-qcard" data-qcmq="${qi}"${multi?' style="border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px;background:#fff"':''}>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <label class="lab" style="flex:1;margin:0">${multi?('Question '+(qi+1)):'Question'}</label>
+        ${multi?`<button class="btn btn--danger btn--sm" onclick="removeQ('${id}',${qi})" title="Retirer cette question">Retirer la question</button>`:''}
+      </div>
+      <input class="txt" data-qmq value="${esc(q.question)}" placeholder="Énoncé de la question">
+      <label class="lab" style="margin-top:10px">Réponses <span style="font-weight:400;color:var(--ink-faint)">— cochez la/les bonne(s), avec un retour pour chacune</span></label>
+      <div class="opts">${(q.options||[]).map((o,oi)=>optRowQ(o,qi,oi)).join('')}</div>
+      <button class="add-link" onclick="addQcmOpt('${id}',${qi})" style="margin:4px 0 12px">+ Ajouter une réponse</button>
+    </div>`).join('');
+  return cards
+    + `<button class="add-link" onclick="addQcmQ('${id}')" style="margin:4px 0 12px">+ Ajouter une question</button>`
+    + `<div class="field"><label class="lab">Retour global (après réponse)</label>
+      <textarea class="txt" data-bf="explanation" placeholder="Synthèse affichée quelle que soit la réponse.">${esc(d.explanation)}</textarea></div>`;
+}
+
 // — Assessment / quiz final —
 const Q_TYPES=[{v:'MultipleChoice',t:'Choix multiple (1 bonne)'},{v:'MultipleResponse',t:'Choix multiples (plusieurs)'},
   {v:'StringResponse',t:'Réponse texte'},{v:'NumericalResponse',t:'Réponse numérique'}];
@@ -1115,12 +1153,17 @@ function srcMeta(d){
   return a;
 }
 function pvChoices(d,single){
-  const id=++pvQ;
-  const opts=(d.options||[]).map((o,i)=>
-    `<button class="pv-choice" data-pv-opt data-correct="${o.correct?1:0}" data-fb="${o.feedback?(id+'-'+i):''}">${esc(o.text||('Réponse '+(i+1)))}</button>`+
-    (o.feedback?`<div class="pv-fb" id="fb-${id}-${i}">${mdInline(o.feedback)}</div>`:'')).join('');
-  return `<div class="pv-qcm"><div class="pv-q">${esc(d.question||'Question')}</div>${opts}`+
-    (d.explanation?`<div class="pv-global" id="gfb-${id}">${mdInline(d.explanation)}</div>`:'')+`</div>`;
+  const qs=qcmQuestions(d); const multi=qs.length>1;
+  const cards=qs.map((q,qi)=>{
+    const id=++pvQ;
+    const opts=(q.options||[]).map((o,i)=>
+      `<button class="pv-choice" data-pv-opt data-correct="${o.correct?1:0}" data-fb="${o.feedback?(id+'-'+i):''}">${esc(o.text||('Réponse '+(i+1)))}</button>`+
+      (o.feedback?`<div class="pv-fb" id="fb-${id}-${i}">${mdInline(o.feedback)}</div>`:'')).join('');
+    const qlabel=multi?`<div class="pv-media-m" style="font-weight:600">Question ${qi+1}</div>`:'';
+    const glob=(!multi&&d.explanation)?`<div class="pv-global" id="gfb-${id}">${mdInline(d.explanation)}</div>`:'';
+    return `<div class="pv-qcm">${qlabel}<div class="pv-q">${esc(q.question||'Question')}</div>${opts}${glob}</div>`;
+  }).join('');
+  return cards+((multi&&d.explanation)?`<div class="pv-global show" style="margin-top:8px">${mdInline(d.explanation)}</div>`:'');
 }
 
 const BLOCKDEFS={
@@ -1255,10 +1298,14 @@ const BLOCKDEFS={
     preview:d=>`<div class="pv-callout note"><div class="pv-c-t">${esc(d.title||'Ressources')}</div><ul class="pv-body">${lines(d.text).map(ln=>{ const p=ln.split('|').map(s=>s.trim()); const t=p[0]||''; const u=p[1];
       return `<li>${u?`<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`:esc(t)}${p[2]?' — '+esc(p[2]):''}</li>`; }).join('')}</ul></div>` },
   qcm:{ label:'QCM',
-    blank:()=>({question:'',options:[{text:'',correct:false,feedback:''},{text:'',correct:true,feedback:''}],explanation:''}),
-    edit:(d,id)=>editChoices(d,id,false),
-    serialize:d=>{ let b=(d.question||'').trim(); const ch=(d.options||[]);
-      if(b&&ch.length) b+='\n'; ch.forEach(o=>{ b+=`\n- [${o.correct?'x':' '}] ${o.text||''}`; if(o.feedback&&o.feedback.trim()) b+=`\n  > ${o.feedback.trim()}`; });
+    blank:()=>({questions:[{question:'',options:[{text:'',correct:false,feedback:''},{text:'',correct:true,feedback:''}]}],explanation:''}),
+    edit:(d,id)=>editChoicesQcm(d,id),
+    serialize:d=>{ const qs=qcmQuestions(d); const multi=qs.length>1; let b='';
+      qs.forEach((q,qi)=>{
+        if(multi) b+=(qi?'\n':'')+`### Question ${qi+1}\n`;
+        const qt=(q.question||'').trim(); if(qt) b+=qt+'\n';
+        (q.options||[]).forEach(o=>{ b+=`- [${o.correct?'x':' '}] ${o.text||''}\n`; if(o.feedback&&o.feedback.trim()) b+=`  > ${o.feedback.trim()}\n`; });
+      });
       return `:::qcm`+A([['explanation',d.explanation]])+'\n'+b.trim()+'\n:::'; },
     preview:d=>pvChoices(d,false) },
   qcu:{ label:'Choix unique',
@@ -1385,6 +1432,18 @@ function bindWork(){
         const fb=row.querySelector('[data-ob-fb]'); if(fb) fb.addEventListener('input',e=>{ o.feedback=e.target.value; markDirty(); });
         const rm=row.querySelector('[data-rmopt]'); if(rm) rm.addEventListener('click',()=>{ d.options.splice(i,1); markDirty(); renderWork(); });
       });
+      // QCM multi-questions
+      card.querySelectorAll('[data-qcmq]').forEach(qc=>{
+        const qi=Number(qc.dataset.qcmq); const q=d.questions&&d.questions[qi]; if(!q) return;
+        const qq=qc.querySelector('[data-qmq]'); if(qq) qq.addEventListener('input',e=>{ q.question=e.target.value; markDirty(); refreshBadge(L); });
+        qc.querySelectorAll('[data-qmo]').forEach(row=>{
+          const oi=Number(row.dataset.qmo); const o=q.options&&q.options[oi]; if(!o) return;
+          const ck=row.querySelector('[data-qmo-correct]'); if(ck) ck.addEventListener('change',e=>{ o.correct=e.target.checked; markDirty(); row.classList.toggle('is-correct',e.target.checked); });
+          const tx=row.querySelector('[data-qmo-text]'); if(tx) tx.addEventListener('input',e=>{ o.text=e.target.value; markDirty(); refreshBadge(L); });
+          const fb=row.querySelector('[data-qmo-fb]'); if(fb) fb.addEventListener('input',e=>{ o.feedback=e.target.value; markDirty(); });
+          const rm=row.querySelector('[data-rmqo]'); if(rm) rm.addEventListener('click',()=>{ q.options.splice(oi,1); markDirty(); renderWork(); });
+        });
+      });
       // questions des évaluations
       card.querySelectorAll('[data-qcard]').forEach(qc=>{
         const qi=Number(qc.dataset.qcard); const q=d.questions[qi]; if(!q) return;
@@ -1461,6 +1520,10 @@ function removeBlock(id){ const L=curLesson(); L.blocks=L.blocks.filter(b=>b.id!
 function moveBlock(id,dir){ const L=curLesson(); const i=L.blocks.findIndex(b=>b.id===id); const j=i+dir;
   if(i<0||j<0||j>=L.blocks.length) return; const t=L.blocks[i]; L.blocks[i]=L.blocks[j]; L.blocks[j]=t; markDirty(); renderWork(); }
 function addOptB(id){ const b=curBlock(id); if(!b) return; b.data.options=b.data.options||[]; b.data.options.push({text:'',correct:false,feedback:''}); markDirty(); renderWork(); }
+// QCM multi-questions : normalise l'ancien modèle plat puis ajoute option/question.
+function qcmNorm(d){ if(!Array.isArray(d.questions)||!d.questions.length){ d.questions=[{question:d.question||'',options:(d.options&&d.options.length)?d.options:[{text:'',correct:false,feedback:''},{text:'',correct:true,feedback:''}]}]; } return d.questions; }
+function addQcmOpt(id,qi){ const b=curBlock(id); if(!b) return; const qs=qcmNorm(b.data); (qs[qi].options=qs[qi].options||[]).push({text:'',correct:false,feedback:''}); markDirty(); renderWork(); }
+function addQcmQ(id){ const b=curBlock(id); if(!b) return; const qs=qcmNorm(b.data); qs.push({question:'',options:[{text:'',correct:false,feedback:''},{text:'',correct:true,feedback:''}]}); markDirty(); renderWork(); }
 function addQ(id){ const b=curBlock(id); if(!b) return; b.data.questions=b.data.questions||[]; b.data.questions.push(blankQuestion()); markDirty(); renderWork(); }
 function removeQ(id,i){ const b=curBlock(id); if(!b) return; b.data.questions.splice(i,1); markDirty(); renderWork(); }
 
