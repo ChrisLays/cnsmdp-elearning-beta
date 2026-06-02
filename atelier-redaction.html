@@ -33,7 +33,7 @@
   body{font-family:var(--font-ui);font-size:var(--text-base);line-height:1.55;color:var(--ink-soft);background:var(--surface-sunk);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
 
   /* ── Top bar ─────────────────────────────────────────── */
-  header.top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:16px;
+  header.top{position:sticky;top:0;z-index:65;display:flex;align-items:center;gap:16px;
     height:56px;padding:0 22px;background:var(--ink);color:#fafafa;flex:0 0 auto}
   .wordmark{font-family:var(--font-display);font-weight:600;font-size:var(--text-md);letter-spacing:-.02em}
   .wordmark em{font-style:italic;font-weight:400;font-size:var(--text-sm);color:#cbd5e1;margin-left:6px}
@@ -48,6 +48,18 @@
   .btn--primary{background:#fff;color:var(--ink);border-color:#fff;font-weight:600}
   .btn--primary:hover{background:#e5e7eb}
   .btn--sm{padding:5px 10px;font-size:var(--text-sm)}
+  /* Menu déroulant du header (regroupe Importer/Charger/Enregistrer) */
+  .hmenu{position:relative;display:inline-flex}
+  .hmenu-panel{position:absolute;top:calc(100% + 6px);right:0;min-width:210px;background:#fff;
+    border:1px solid #e5e5e3;border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.22);
+    padding:6px;display:none;flex-direction:column;gap:2px;z-index:40}
+  .hmenu.open .hmenu-panel{display:flex}
+  .hmenu-panel button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;
+    border:0;border-radius:6px;padding:9px 11px;font-family:var(--font-ui);font-size:var(--text-sm);
+    color:var(--ink,#1a1a1a);cursor:pointer}
+  .hmenu-panel button:hover{background:#f0f0ee}
+  .hmenu-panel .hm-ic{width:16px;text-align:center;opacity:.7}
+  .hmenu-panel .hm-sep{height:1px;background:#e5e5e3;margin:4px 2px}
   .btn--danger{color:var(--err-fg);border-color:transparent;background:transparent;padding:5px 8px}
   .btn--danger:hover{background:var(--err-bg);border-color:var(--err-bg)}
 
@@ -268,7 +280,7 @@
   .summary-pill{display:inline-flex;align-items:center;gap:6px;font-size:var(--text-sm);background:var(--surface-alt);border:1px solid var(--border);border-radius:999px;padding:3px 10px;margin:3px 4px 3px 0}
 
   /* Export modal */
-  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;display:none;align-items:center;justify-content:center;padding:24px}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:80;display:none;align-items:center;justify-content:center;padding:24px}
   .overlay.show{display:flex}
   .modal{background:var(--surface);border-radius:var(--radius-lg);max-width:760px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.3)}
   .modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border)}
@@ -354,9 +366,16 @@
   <span class="wordmark">CNSMDP <em>Atelier de rédaction</em></span>
   <span class="spacer"></span>
   <span class="save-state" id="saveState">—</span>
-  <button class="btn btn--ghost btn--sm" onclick="openImport()">Importer</button>
-  <button class="btn btn--ghost btn--sm" onclick="loadProject()">Charger</button>
-  <button class="btn btn--ghost btn--sm" onclick="saveProject()">Enregistrer</button>
+  <div class="hmenu" id="fileMenu">
+    <button class="btn btn--ghost btn--sm" aria-haspopup="true" aria-expanded="false"
+      onclick="event.stopPropagation();toggleFileMenu()">Fichier ▾</button>
+    <div class="hmenu-panel" role="menu">
+      <button role="menuitem" onclick="closeFileMenu();openImport()"><span class="hm-ic">⤓</span>Importer un document…</button>
+      <div class="hm-sep"></div>
+      <button role="menuitem" onclick="closeFileMenu();loadProject()"><span class="hm-ic">📂</span>Charger un projet…</button>
+      <button role="menuitem" onclick="closeFileMenu();saveProject()"><span class="hm-ic">💾</span>Enregistrer le projet</button>
+    </div>
+  </div>
   <button class="btn btn--ghost btn--sm" onclick="openPreview()">Aperçu</button>
   <button class="btn btn--primary btn--sm" onclick="openExport()">Exporter pour le CNSMDP</button>
 </header>
@@ -1961,6 +1980,14 @@ function updateFieldRendu(ta){ if(!_renduEl) return; const v=ta.value;
   _renduEl.innerHTML='<div class="fr-lab">Aperçu du rendu</div>'+mdBlock(v);
   if(ta.nextSibling!==_renduEl) ta.parentNode.insertBefore(_renduEl,ta.nextSibling); _renduFor=ta; }
 function hideFieldRendu(){ if(_renduEl&&_renduEl.parentNode) _renduEl.remove(); _renduFor=null; }
+
+/* Menu « Fichier » du header */
+function toggleFileMenu(){ const m=document.getElementById('fileMenu'); const open=m.classList.toggle('open');
+  m.querySelector('button[aria-haspopup]').setAttribute('aria-expanded', open?'true':'false'); }
+function closeFileMenu(){ const m=document.getElementById('fileMenu'); if(!m) return; m.classList.remove('open');
+  const b=m.querySelector('button[aria-haspopup]'); if(b) b.setAttribute('aria-expanded','false'); }
+document.addEventListener('click',e=>{ const m=document.getElementById('fileMenu'); if(m && m.classList.contains('open') && !m.contains(e.target)) closeFileMenu(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeFileMenu(); });
 
 function renderPreview(){
   pvQ=0;
