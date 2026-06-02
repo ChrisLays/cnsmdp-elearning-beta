@@ -381,13 +381,13 @@
       onclick="event.stopPropagation();toggleFileMenu()">Fichier ▾</button>
     <div class="hmenu-panel" role="menu">
       <button role="menuitem" onclick="closeFileMenu();openImport()"><span class="hm-ic">⤓</span>Importer un document…</button>
-      <div class="hm-sep"></div>
       <button role="menuitem" onclick="closeFileMenu();loadProject()"><span class="hm-ic">📂</span>Charger un projet…</button>
-      <button role="menuitem" onclick="closeFileMenu();saveProject()"><span class="hm-ic">💾</span>Enregistrer le projet</button>
+      <button role="menuitem" onclick="closeFileMenu();saveProject()"><span class="hm-ic">💾</span>Télécharger le document</button>
+      <div class="hm-sep"></div>
+      <button role="menuitem" onclick="closeFileMenu();openPreview()"><span class="hm-ic">◉</span>Aperçu</button>
+      <button role="menuitem" onclick="closeFileMenu();openExport()"><span class="hm-ic">↗</span>Exporter pour le CNSMDP</button>
     </div>
   </div>
-  <button class="btn btn--ghost btn--sm" onclick="openPreview()">Aperçu</button>
-  <button class="btn btn--primary btn--sm" onclick="openExport()">Exporter pour le CNSMDP</button>
 </header>
 
 <div class="shell">
@@ -874,7 +874,7 @@ const TR = {
   "Fichier ▾":"File ▾",
   "Importer un document…":"Import a document…",
   "Charger un projet…":"Load a project…",
-  "Enregistrer le projet":"Save the project",
+  "Télécharger le document":"Download the document",
   "Aperçu":"Preview",
   "Exporter pour le CNSMDP":"Export for CNSMDP",
   // — État de sauvegarde / toasts / statuts —
