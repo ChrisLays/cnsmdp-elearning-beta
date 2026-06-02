@@ -48,12 +48,17 @@
   .btn--primary{background:#fff;color:var(--ink);border-color:#fff;font-weight:600}
   .btn--primary:hover{background:#e5e7eb}
   .btn--sm{padding:5px 10px;font-size:var(--text-sm)}
-  /* Menu déroulant du header (regroupe Importer/Charger/Enregistrer) */
+  /* Menu déroulant (regroupe Importer/Charger/Télécharger/Aperçu/Exporter) */
   .hmenu{position:relative;display:inline-flex}
-  .hmenu-panel{position:absolute;top:calc(100% + 6px);right:0;min-width:210px;background:#fff;
+  .hmenu-panel{position:absolute;top:calc(100% + 6px);left:0;min-width:230px;background:#fff;
     border:1px solid #e5e5e3;border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.22);
-    padding:6px;display:none;flex-direction:column;gap:2px;z-index:40}
+    padding:6px;display:none;flex-direction:column;gap:2px;z-index:62}
   .hmenu.open .hmenu-panel{display:flex}
+  /* Déclencheur du menu dans la barre d'outils (fond clair) */
+  .barmenu-btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;
+    border:1px solid var(--border-strong);background:var(--surface);color:var(--ink);
+    font-family:var(--font-ui);font-size:var(--text-sm);font-weight:500;border-radius:6px;cursor:pointer;white-space:nowrap}
+  .barmenu-btn:hover{background:var(--surface-alt);border-color:var(--ink)}
   .hmenu-panel button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;
     border:0;border-radius:6px;padding:9px 11px;font-family:var(--font-ui);font-size:var(--text-sm);
     color:var(--ink,#1a1a1a);cursor:pointer}
@@ -124,8 +129,9 @@
   .field-rendu strong{font-weight:700}.field-rendu em{font-style:italic}
   /* Toolbar de mise en forme — fixe en haut de la zone d'édition */
   .editbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(6px);
-    border-bottom:1px solid var(--border)}
-  .editbar-inner{max-width:720px;margin:0 auto;padding:7px 32px;display:flex;align-items:center;gap:3px}
+    border-bottom:1px solid var(--border);display:flex;align-items:center}
+  .editbar .hmenu{flex:0 0 auto;padding-left:18px}
+  .editbar-inner{flex:1;max-width:720px;margin:0 auto;padding:7px 32px;display:flex;align-items:center;gap:3px}
   .fmtbtn{min-width:30px;height:28px;padding:0 9px;border:none;background:transparent;color:var(--ink-soft);font-family:var(--font-ui);font-size:var(--text-base);line-height:1;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center}
   .fmtbtn:hover{background:var(--surface-alt);color:var(--ink)}
   .fmtbtn .sub{font-size:var(--text-xs);vertical-align:-2px;margin-left:1px}
@@ -375,18 +381,6 @@
   <div class="lang-switch" id="langSwitch" title="Langue de l'interface / Interface language">
     <button id="langFr" class="on" onclick="applyLang('fr')">FR</button>
     <button id="langEn" onclick="applyLang('en')">EN</button>
-  </div>
-  <div class="hmenu" id="fileMenu">
-    <button class="btn btn--ghost btn--sm" aria-haspopup="true" aria-expanded="false"
-      onclick="event.stopPropagation();toggleFileMenu()">Fichier ▾</button>
-    <div class="hmenu-panel" role="menu">
-      <button role="menuitem" onclick="closeFileMenu();openImport()"><span class="hm-ic">⤓</span>Importer un document…</button>
-      <button role="menuitem" onclick="closeFileMenu();loadProject()"><span class="hm-ic">📂</span>Charger un projet…</button>
-      <button role="menuitem" onclick="closeFileMenu();saveProject()"><span class="hm-ic">💾</span>Télécharger le document</button>
-      <div class="hm-sep"></div>
-      <button role="menuitem" onclick="closeFileMenu();openPreview()"><span class="hm-ic">◉</span>Aperçu</button>
-      <button role="menuitem" onclick="closeFileMenu();openExport()"><span class="hm-ic">↗</span>Exporter pour le CNSMDP</button>
-    </div>
   </div>
 </header>
 
@@ -871,7 +865,7 @@ function LL(fr,en){ return LANG==='en'?en:fr; }
 const TR = {
   // — Header / menu —
   "Atelier de rédaction":"Writing Studio",
-  "Fichier ▾":"File ▾",
+  "Menu ▾":"Menu ▾",
   "Importer un document…":"Import a document…",
   "Charger un projet…":"Load a project…",
   "Télécharger le document":"Download the document",
@@ -1042,7 +1036,7 @@ function trHTML(el){ const v=trLook(el.innerHTML); if(v!=null){ if(el.getAttribu
 function trTail(el){ const ns=el.childNodes, n=ns[ns.length-1]; if(!n||n.nodeType!==3) return;
   const raw=n.textContent, k=raw.trim(), v=trLook(k); if(v!=null){ if(el.getAttribute('data-fr-tail')==null) el.setAttribute('data-fr-tail',raw); n.textContent=raw.replace(k,v); } }
 function trAttrEl(el,name){ const cur=el.getAttribute(name); const v=trLook(cur); if(v!=null){ const store='data-fr-'+name; if(el.getAttribute(store)==null) el.setAttribute(store,cur); el.setAttribute(name,v); } }
-const TR_TEXT_SEL='.lab,.hint,.sec,.micro,.empty-note,.add-link,.add-blk-btn,.pv-bar-title,.pal-empty,.pal-search,.course-name,.wordmark em,.modal h3,.modal p.hint,.guide-link .lbl,.btn,option,label';
+const TR_TEXT_SEL='.lab,.hint,.sec,.micro,.empty-note,.add-link,.add-blk-btn,.pv-bar-title,.pal-empty,.pal-search,.course-name,.wordmark em,.modal h3,.modal p.hint,.guide-link .lbl,.btn,.barmenu-btn,option,label';
 function translateTree(root){ root=root||document; if(LANG!=='en') return;
   root.querySelectorAll('.tip>div').forEach(trHTML);
   root.querySelectorAll(TR_TEXT_SEL).forEach(trHTML);
@@ -2310,7 +2304,19 @@ let fmtTarget=null, editBar=null;
 function isEditable(el){ return el && el.classList && el.classList.contains('txt') && (el.tagName==='TEXTAREA'||el.tagName==='INPUT'); }
 function initFmtBar(){
   editBar=document.getElementById('editbar');
-  editBar.innerHTML=`<div class="editbar-inner">`+FMT_BTNS.map(b=> b.act==='sep'
+  editBar.innerHTML=
+    `<div class="hmenu" id="fileMenu">`+
+      `<button class="barmenu-btn" aria-haspopup="true" aria-expanded="false" onclick="event.stopPropagation();toggleFileMenu()">Menu ▾</button>`+
+      `<div class="hmenu-panel" role="menu">`+
+        `<button role="menuitem" onclick="closeFileMenu();openImport()"><span class="hm-ic">⤓</span>Importer un document…</button>`+
+        `<button role="menuitem" onclick="closeFileMenu();loadProject()"><span class="hm-ic">📂</span>Charger un projet…</button>`+
+        `<button role="menuitem" onclick="closeFileMenu();saveProject()"><span class="hm-ic">💾</span>Télécharger le document</button>`+
+        `<div class="hm-sep"></div>`+
+        `<button role="menuitem" onclick="closeFileMenu();openPreview()"><span class="hm-ic">◉</span>Aperçu</button>`+
+        `<button role="menuitem" onclick="closeFileMenu();openExport()"><span class="hm-ic">↗</span>Exporter pour le CNSMDP</button>`+
+      `</div>`+
+    `</div>`+
+    `<div class="editbar-inner">`+FMT_BTNS.map(b=> b.act==='sep'
     ? '<span class="sep"></span>'
     : `<button type="button" class="fmtbtn${b.cls?' '+b.cls:''}" data-fmt="${b.act}" title="${b.title}" aria-label="${b.title}">${b.html}</button>`).join('')+
     `<div class="bar-gauge" id="barGauge" hidden><span class="bg-txt" id="bgTxt"></span><span class="bg-bar"><span class="bg-fill" id="bgFill"></span></span></div>`+
