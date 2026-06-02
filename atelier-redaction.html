@@ -95,6 +95,15 @@
   textarea.txt{resize:vertical;min-height:80px}
   textarea.big{min-height:150px}
   input.txt:focus,textarea.txt:focus,select.txt:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(17,17,17,.06)}
+  /* Aperçu du rendu sous le champ en cours d'édition (Phase B) */
+  .field-rendu{margin:6px 0 2px;padding:9px 11px;background:var(--surface-2,#f7f7f6);
+    border:1px solid var(--border,#e5e5e3);border-left:3px solid var(--ink);border-radius:var(--radius-sm);
+    font-size:var(--text-sm);color:var(--ink);line-height:1.55}
+  .field-rendu .fr-lab{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px}
+  .field-rendu p{margin:.2em 0}
+  .field-rendu ul{margin:.2em 0;padding-left:1.2em}
+  .field-rendu .pv-h3{font-weight:600;margin:.3em 0}
+  .field-rendu strong{font-weight:700}.field-rendu em{font-style:italic}
   /* Toolbar de mise en forme — fixe en haut de la zone d'édition */
   .editbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(6px);
     border-bottom:1px solid var(--border)}
@@ -981,6 +990,15 @@ function viewLesson(p,L){
   <input class="txt" data-l="title" value="${esc(L.title)}" placeholder="Titre du chapitre"
      style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:600;border:none;padding-left:0;color:var(--ink)">
 
+  <div class="row" style="margin-top:14px">
+    <div class="field" style="max-width:200px"><label class="lab">Durée visée (min)</label>
+      <div class="hint">Cible 30–45 min. Calibre la jauge de volume.</div>
+      <input class="txt" type="number" min="5" max="120" step="5" data-l="durationMin" value="${esc(L.durationMin)}" placeholder="35"></div>
+    <div class="field"><label class="lab">Prérequis du chapitre</label>
+      <div class="hint">Ce qu'il faut maîtriser avant d'aborder ce chapitre (optionnel).</div>
+      <input class="txt" data-l="prereq" value="${esc(L.prereq)}" placeholder="ex. avoir vu le chapitre précédent…"></div>
+  </div>
+
   <h2 class="sec" style="margin-top:18px">Objectifs du chapitre</h2>
   <div class="hint">3 à 5 objectifs, un par ligne, commençant par un verbe d'action.</div>
   <div class="field"><textarea class="txt" data-l="objectives" placeholder="Identifier…
@@ -1439,7 +1457,7 @@ function bindWork(){
   const L=selected.type==='lesson'? findLesson(selected.partId,selected.lessonId):null;
   if(L){
     w.querySelectorAll('[data-l]').forEach(el=>el.addEventListener('input',e=>{
-      const k=el.dataset.l; L[k]= (k==='durationMin')? e.target.value : e.target.value;
+      const k=el.dataset.l; L[k]= (k==='durationMin')? (parseInt(e.target.value,10)||0) : e.target.value;
       markDirty(); refreshBadge(L);
       if(k==='title') renderSidebar();
       if(k==='durationMin') updateGauge(L);
@@ -1503,7 +1521,8 @@ function syncBarGauge(){
   else if(c<lo) verdict=`Visez ~${L.durationMin} min (au moins ${fmt(lo)} mots).`;
   else if(c<=hi){ cls='ok'; verdict='Pile dans la cible du chapitre. 👌'; }
   else { cls='over'; verdict='Riche — c\'est très bien ! Nous raccourcirons si besoin.'; }
-  document.getElementById('bgTxt').innerHTML=`≈ <b>${eLo}–${eHi} min</b> · ${fmt(c)} mots`;
+  const tmin = eHi===0 ? (c>0?'< 1':'0') : `${eLo}–${eHi}`;
+  document.getElementById('bgTxt').innerHTML=`≈ <b>${tmin} min</b> · ${fmt(c)} mots`;
   const fill=document.getElementById('bgFill'); fill.style.width=pct+'%'; fill.className='bg-fill '+cls;
   bg.title=`${verdict} — cible ${L.durationMin} min (${fmt(lo)}–${fmt(hi)} mots).`;
 }
@@ -1879,9 +1898,12 @@ async function convertDocToMarkdown(file){
   if(ext==='ppt')  throw new Error('Le format .ppt (PowerPoint ancien) n’est convertible que via le serveur local. Réenregistrez-le en .pptx, ou lancez l’atelier en local (npm start).');
   throw new Error('Format « .'+ext+' » non pris en charge sans le serveur local.');
 }
-function openImport(){ document.getElementById('importOverlay').classList.add('open'); setImportStatus('');
+function openImport(){ document.getElementById('importOverlay').classList.add('show');
+  const L=currentLesson();
+  setImportStatus(L ? 'Le contenu sera ajouté au chapitre « '+(L.title||'sans titre')+' ».'
+                    : 'Sélectionnez d’abord un chapitre dans le menu de gauche : l’import s’ajoute toujours à un chapitre.', !L);
   document.getElementById('importPreviewWrap').style.display='none'; document.getElementById('importInsert').disabled=true; }
-function closeImport(){ document.getElementById('importOverlay').classList.remove('open'); }
+function closeImport(){ document.getElementById('importOverlay').classList.remove('show'); }
 function setImportStatus(t,err){ const el=document.getElementById('importStatus'); el.textContent=t||''; el.style.color=err?'var(--err-fg)':'var(--ink-soft)'; }
 function pickImportFile(){ document.getElementById('importInput').click(); }
 async function runImport(file){
@@ -1928,6 +1950,17 @@ function mdBlock(s){
   }).join('');
 }
 function listHTML(s){ const ls=lines(s); return ls.length?('<ul>'+ls.map(x=>`<li>${mdInline(x)}</li>`).join('')+'</ul>'):''; }
+
+/* Aperçu du rendu sous le champ en cours d'édition (Phase B) — n'affecte jamais le MD. */
+const FMT_RE=/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]*\]\([^)]*\))|(^\s{0,3}#{1,3}\s)|(^\s*[-*]\s)|(^>\s)/m;
+let _renduEl=null,_renduFor=null;
+function hasFmt(v){ return FMT_RE.test(v||''); }
+function showFieldRendu(ta){ if(!ta||ta.tagName!=='TEXTAREA') return; if(!_renduEl){ _renduEl=document.createElement('div'); _renduEl.className='field-rendu'; } updateFieldRendu(ta); }
+function updateFieldRendu(ta){ if(!_renduEl) return; const v=ta.value;
+  if(!hasFmt(v)){ if(_renduEl.parentNode) _renduEl.remove(); _renduFor=null; return; }
+  _renduEl.innerHTML='<div class="fr-lab">Aperçu du rendu</div>'+mdBlock(v);
+  if(ta.nextSibling!==_renduEl) ta.parentNode.insertBefore(_renduEl,ta.nextSibling); _renduFor=ta; }
+function hideFieldRendu(){ if(_renduEl&&_renduEl.parentNode) _renduEl.remove(); _renduFor=null; }
 
 function renderPreview(){
   pvQ=0;
@@ -2002,7 +2035,8 @@ let toastTimer=null;
 function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),2200); }
 document.getElementById('exportOverlay').addEventListener('click',e=>{ if(e.target.id==='exportOverlay') closeExport(); });
 document.getElementById('previewOverlay').addEventListener('click',e=>{ if(e.target.id==='previewOverlay') closePreview(); });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeExport(); closePreview(); } });
+document.getElementById('importOverlay').addEventListener('click',e=>{ if(e.target.id==='importOverlay') closeImport(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeExport(); closePreview(); closeImport(); } });
 
 /* ============================================================
    TOOLBAR FIXE — mise en forme du champ en cours d'édition
@@ -2035,7 +2069,9 @@ function initFmtBar(){
     `</div>`;
   editBar.addEventListener('mousedown',e=>{ if(e.target.closest('.fmtbtn')) e.preventDefault(); }); // garder la sélection
   editBar.addEventListener('click',e=>{ const b=e.target.closest('[data-fmt]'); if(b) applyFmt(b.dataset.fmt); });
-  document.addEventListener('focusin',e=>{ if(isEditable(e.target)){ fmtTarget=e.target; editBar.classList.add('armed'); } });
+  document.addEventListener('focusin',e=>{ if(isEditable(e.target)){ fmtTarget=e.target; editBar.classList.add('armed'); showFieldRendu(e.target); } });
+  document.addEventListener('input',e=>{ if(_renduFor && e.target===_renduFor) updateFieldRendu(e.target); });
+  document.addEventListener('focusout',e=>{ if(e.target===_renduFor) hideFieldRendu(); });
 }
 function applyFmt(act){
   if(act==='dictate'){ return toggleDictation(); }
