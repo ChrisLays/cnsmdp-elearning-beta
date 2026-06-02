@@ -60,6 +60,12 @@
   .hmenu-panel button:hover{background:#f0f0ee}
   .hmenu-panel .hm-ic{width:16px;text-align:center;opacity:.7}
   .hmenu-panel .hm-sep{height:1px;background:#e5e5e3;margin:4px 2px}
+  /* Bascule de langue FR | EN */
+  .lang-switch{display:inline-flex;border:1px solid #374151;border-radius:7px;overflow:hidden}
+  .lang-switch button{background:transparent;color:#9ca3af;border:0;padding:5px 9px;font-family:var(--font-ui);
+    font-size:var(--text-xs);font-weight:600;letter-spacing:.04em;cursor:pointer}
+  .lang-switch button:hover{color:#e5e7eb}
+  .lang-switch button.on{background:#fff;color:var(--ink)}
   .btn--danger{color:var(--err-fg);border-color:transparent;background:transparent;padding:5px 8px}
   .btn--danger:hover{background:var(--err-bg);border-color:var(--err-bg)}
 
@@ -366,6 +372,10 @@
   <span class="wordmark">CNSMDP <em>Atelier de rédaction</em></span>
   <span class="spacer"></span>
   <span class="save-state" id="saveState">—</span>
+  <div class="lang-switch" id="langSwitch" title="Langue de l'interface / Interface language">
+    <button id="langFr" class="on" onclick="applyLang('fr')">FR</button>
+    <button id="langEn" onclick="applyLang('en')">EN</button>
+  </div>
   <div class="hmenu" id="fileMenu">
     <button class="btn btn--ghost btn--sm" aria-haspopup="true" aria-expanded="false"
       onclick="event.stopPropagation();toggleFileMenu()">Fichier ▾</button>
@@ -737,7 +747,7 @@ function markDirty(){
     setSaveState('Enregistré ✓');
   },500);
 }
-function setSaveState(t){ document.getElementById('saveState').textContent=t; }
+function setSaveState(t){ document.getElementById('saveState').textContent=(LANG==='en'&&typeof TR!=='undefined'&&TR[t])?TR[t]:t; }
 function restore(){
   const raw=localStorage.getItem(LS_KEY);
   if(raw){ try{ state=JSON.parse(raw); }catch(e){} }
@@ -850,6 +860,217 @@ function fmt(n){ return n.toLocaleString('fr-FR'); }
 function calcDuration(min){ if(min<60) return min+' min'; const h=Math.floor(min/60), r=min%60; return r===0? h+'h' : h+'h'+String(r).padStart(2,'0'); }
 
 /* ============================================================
+   INTERNATIONALISATION (FR ↔ EN) — chrome de l'interface uniquement.
+   IMPORTANT : ne touche JAMAIS md()/serialize()/parse(). La grammaire MD
+   reste en français quelle que soit la langue affichée. On traduit le DOM
+   après chaque rendu (translateTree) et on restaure au retour FR.
+   ============================================================ */
+let LANG = (function(){ try{ return localStorage.getItem('cnsmdp-atelier-lang')||'fr'; }catch(e){ return 'fr'; } })();
+function LL(fr,en){ return LANG==='en'?en:fr; }
+
+const TR = {
+  // — Header / menu —
+  "Atelier de rédaction":"Writing Studio",
+  "Fichier ▾":"File ▾",
+  "Importer un document…":"Import a document…",
+  "Charger un projet…":"Load a project…",
+  "Enregistrer le projet":"Save the project",
+  "Aperçu":"Preview",
+  "Exporter pour le CNSMDP":"Export for CNSMDP",
+  // — État de sauvegarde / toasts / statuts —
+  "—":"—","Prêt":"Ready","Enregistrement…":"Saving…","Enregistré ✓":"Saved ✓",
+  "Cours enregistré au format Markdown (.md)":"Course saved as Markdown (.md)",
+  "Brouillon chargé":"Draft loaded","Cours chargé (.md)":"Course loaded (.md)",
+  "Fichier illisible":"Unreadable file","Rien à importer.":"Nothing to import.",
+  "Conversion réussie. Relisez le markdown ci-dessous, puis insérez-le.":"Conversion successful. Review the markdown below, then insert it.",
+  "Conversion impossible.":"Conversion failed.",
+  "Sélectionnez d’abord un chapitre dans le panneau de gauche.":"Select a chapter in the left panel first.",
+  "Sélectionnez d’abord un chapitre dans le menu de gauche : l’import s’ajoute toujours à un chapitre.":"Select a chapter in the left menu first: imports are always added to a chapter.",
+  // — Sidebar —
+  "Titre du cours":"Course title","Plan du cours":"Course outline",
+  "Introduction du cours":"Course introduction","Conclusion du cours":"Course conclusion",
+  "+ Ajouter un chapitre":"+ Add a chapter","+ Ajouter une partie":"+ Add a part",
+  "Fin":"End","Aide":"Help","Guide de conception":"Design guide",
+  // — Intro —
+  "C'est le premier contact de l'apprenant·e avec votre cours. Elle doit donner envie et poser le cadre.":"This is the learner's first contact with your course. It should spark interest and set the frame.",
+  "<b>Avant tout, le cadre matériel.</b> Ces informations nous aident à dimensionner le projet.":"<b>First, the practical frame.</b> This information helps us size the project.",
+  "Auteur·e(s)":"Author(s)","Votre nom":"Your name",
+  "Durée totale visée":"Target total duration","ex. 4 à 5 h":"e.g. 4 to 5 h",
+  "Public visé":"Target audience",
+  "ex. étudiant·es de 2e cycle, professionnel·les en reprise…":"e.g. master's students, professionals returning to study…",
+  "Pourquoi ce cours ? — vos intentions":"Why this course? — your intentions",
+  "<b>Astuce « page blanche » (JC Vançon).</b> Partez d'un <b>cas particulier exemplaire</b>\n    (une œuvre, une interprétation, une expérience), mettez plusieurs cas en relation, et creusez <b>une</b> problématique précise.\n    Un cours <b>forme</b>, il n'informe pas seulement : visez des savoirs <i>et</i> des savoir-faire.":"<b>“Blank page” tip (JC Vançon).</b> Start from <b>one exemplary case</b>\n    (a work, an interpretation, an experience), connect several cases, and dig into <b>one</b> precise question.\n    A course <b>trains</b>, it does not merely inform: aim for knowledge <i>and</i> know-how.",
+  "Votre angle, votre problématique centrale, ce qui rend ce cours singulier…":"Your angle, your central question, what makes this course unique…",
+  "Objectifs généraux":"General objectives",
+  "3 à 6 objectifs, <b>un par ligne</b>, chacun commençant par un <b>verbe d'action</b>.\n    Distinguez les <b>savoirs</b> (comprendre, identifier, analyser…) des <b>savoir-faire</b> (produire, exécuter, choisir, corriger…).":"3 to 6 objectives, <b>one per line</b>, each starting with an <b>action verb</b>.\n    Distinguish <b>knowledge</b> (understand, identify, analyse…) from <b>know-how</b> (produce, perform, choose, correct…).",
+  "À la fin de ce cours, vous saurez…\nÀ la fin de ce cours, vous serez capable de…":"By the end of this course, you will know…\nBy the end of this course, you will be able to…",
+  "Public et prérequis":"Audience & prerequisites","Prérequis":"Prerequisites",
+  "Que faut-il déjà savoir ou savoir-faire pour suivre ce cours ?":"What knowledge or skills are needed to take this course?",
+  "ex. avoir des bases d'harmonie, savoir lire une partition…":"e.g. basics of harmony, reading a score…",
+  "Plan général":"General outline",
+  "Le plan se construit tout seul à partir des <b>parties</b> et des <b>chapitres</b> que vous créez dans le menu de gauche.\n    Une partie vise <b>1h30 à 2h</b>, un chapitre <b>30 à 45 min</b>. Voici l'état actuel :":"The outline builds itself from the <b>parts</b> and <b>chapters</b> you create in the left menu.\n    A part targets <b>1h30 to 2h</b>, a chapter <b>30 to 45 min</b>. Here is the current state:",
+  "Aucune partie pour l'instant. Ajoutez-en une dans le menu de gauche.":"No part yet. Add one from the left menu.",
+  // — Partie —
+  "Titre de la partie":"Part title",
+  "Une partie regroupe plusieurs chapitres et vise <b>1h30 à 2h</b> de temps apprenant.":"A part groups several chapters and targets <b>1h30 to 2h</b> of learner time.",
+  "Intention de la partie":"Part intent",
+  "En 2-3 phrases : ce que couvre cette partie et pourquoi elle arrive ici dans la progression.":"In 2–3 sentences: what this part covers and why it comes here in the progression.",
+  "Présentation de la partie…":"Introduce the part…",
+  "Cumul estimé des chapitres de cette partie, calculé sur le volume de texte écrit.":"Estimated total of this part's chapters, based on the amount of text written.",
+  "Supprimer cette partie":"Delete this part",
+  // — Chapitre —
+  "Titre du chapitre":"Chapter title","Durée visée (min)":"Target duration (min)",
+  "Cible 30–45 min. Calibre la jauge de volume.":"Target 30–45 min. Calibrates the volume gauge.",
+  "Prérequis du chapitre":"Chapter prerequisites",
+  "Ce qu'il faut maîtriser avant d'aborder ce chapitre (optionnel).":"What to master before tackling this chapter (optional).",
+  "ex. avoir vu le chapitre précédent…":"e.g. having seen the previous chapter…",
+  "Objectifs du chapitre":"Chapter objectives",
+  "3 à 5 objectifs, un par ligne, commençant par un verbe d'action.":"3 to 5 objectives, one per line, starting with an action verb.",
+  "Identifier…\nAnalyser…\nMettre en œuvre…":"Identify…\nAnalyse…\nImplement…",
+  "Contenu du chapitre":"Chapter content",
+  "<b>Composez votre chapitre bloc par bloc.</b> Rédigez comme si vous dictiez le cours à un·e collègue —\n    ajoutez du texte, vos médias, des activités. Réordonnez avec ▲ ▼. La barre d'outils en haut met en forme le champ où vous écrivez.":"<b>Compose your chapter block by block.</b> Write as if dictating the course to a colleague —\n    add text, your media, activities. Reorder with ▲ ▼. The toolbar at the top formats the field you are writing in.",
+  "Aucun bloc pour l'instant — ajoutez-en un ci-dessous.":"No block yet — add one below.",
+  "+ Ajouter un bloc":"+ Add a block","Notes pour l'équipe":"Notes for the team",
+  "Doutes, points à valider, médias à fournir plus tard… (ne sera pas montré à l'apprenant·e)":"Doubts, points to confirm, media to provide later… (not shown to the learner)",
+  "Vos notes libres…":"Your free notes…","Supprimer ce chapitre":"Delete this chapter",
+  // — Conclusion —
+  "Bilan général":"Overall summary",
+  "Le fil rouge du cours, ce que l'apprenant·e a acquis, ouverture vers la pratique ou la suite.":"The course's through-line, what the learner has gained, an opening toward practice or what comes next.",
+  "Votre conclusion…":"Your conclusion…","L'essentiel à retenir":"Key takeaways",
+  "Les idées-force du cours, une par ligne.":"The course's key ideas, one per line.",
+  "Idée-force 1\nIdée-force 2":"Key idea 1\nKey idea 2",
+  // — Carte de bloc / actions —
+  "Monter":"Move up","Descendre":"Move down","Retirer":"Remove",
+  "Retirer la question":"Remove question","Retirer cette réponse":"Remove this answer",
+  "Retirer cette question":"Remove this question",
+  // — Palette —
+  "Rechercher un bloc…":"Search a block…","Aucun bloc ne correspond.":"No matching block.",
+  "Structure & texte":"Structure & text","Accroche":"Hook","Présenter":"Present",
+  "Faire pratiquer":"Practise","Mémoriser":"Memorise","Évaluer":"Assess",
+  // — Libellés de blocs —
+  "Paragraphe":"Paragraph","Titre (H1)":"Heading (H1)","Sous-titre (H2)":"Subheading (H2)",
+  "Liste à puces":"Bulleted list","Liste numérotée":"Numbered list","Tableau":"Table",
+  "Deux colonnes":"Two columns","Plan":"Outline","Citation":"Quote","Encadré":"Callout",
+  "Objectifs":"Objectives","Vidéo expert·e":"Expert video","Vidéo":"Video","Audio":"Audio",
+  "Image":"Image","Brief illustration":"Illustration brief","Motion design":"Motion design",
+  "Module sur-mesure":"Custom module","Image + texte":"Image + text","PDF":"PDF",
+  "Réflexion":"Reflection","Écoute active":"Active listening","À retenir":"Takeaways",
+  "Ressources":"Resources","QCM":"Multiple choice","Choix unique":"Single choice",
+  "Vrai / Faux":"True / False","Évaluation":"Assessment","Quiz final":"Final quiz",
+  // — Champs de blocs (labels) —
+  "Texte":"Text","Titre — ouvre une nouvelle slide":"Heading — opens a new slide",
+  "Sous-titre":"Subheading","Éléments (un par ligne)":"Items (one per line)",
+  "Étapes / éléments (un par ligne)":"Steps / items (one per line)",
+  "Colonne de gauche":"Left column","Colonne de droite":"Right column","Titre":"Title",
+  "Entrées (une par ligne)":"Entries (one per line)","Auteur·e":"Author",
+  "Fonction / rôle":"Function / role","Source":"Source","Type":"Type","Contenu":"Content",
+  "Titre (optionnel)":"Title (optional)","Objectifs (un par ligne)":"Objectives (one per line)",
+  "Intervenant·e":"Speaker","Fonction":"Role","Lien vidéo (ou « à produire »)":"Video link (or “to be produced”)",
+  "Transcription / script":"Transcript / script","Lien (YouTube, Vimeo…)":"Link (YouTube, Vimeo…)",
+  "Début (mm:ss)":"Start (mm:ss)","Fin (mm:ss)":"End (mm:ss)","Description / intention":"Description / intent",
+  "Source / lien":"Source / link","Transcription":"Transcript","Intention pédagogique":"Teaching intent",
+  "Lien image (vide si à fournir)":"Image link (empty if to be provided)","Texte alternatif":"Alt text",
+  "Légende":"Caption","Description (si à produire)":"Description (if to be produced)",
+  "Style souhaité":"Desired style","Référence (URL)":"Reference (URL)","Dépôt / lien":"Repository / link",
+  "Durée":"Duration","Brief motion":"Motion brief","Titre du module souhaité":"Desired module title",
+  "Objectif pédagogique":"Teaching objective","Type d'interaction":"Interaction type",
+  "Données / contenu à intégrer":"Data / content to include","Parcours apprenant·e":"Learner journey",
+  "Références / inspirations (lien)":"References / inspiration (link)",
+  "Précisions libres pour l'équipe interactive":"Free notes for the interactive team",
+  "Lien image":"Image link","Position image":"Image position","Lien PDF":"PDF link","Description":"Description",
+  "Question / consigne de réflexion":"Reflection question / prompt","Retour (optionnel)":"Feedback (optional)",
+  "Consigne / titre":"Prompt / title","Extrait (lien)":"Excerpt (link)","Question posée":"Question asked",
+  "Points clés (un par ligne)":"Key points (one per line)","Affirmation":"Statement","Réponse":"Answer",
+  "Question":"Question","Énoncé":"Statement","Réponses":"Answers","Type du quiz":"Quiz type",
+  "Titre du quiz":"Quiz title","Tentatives max (optionnel)":"Max attempts (optional)",
+  "Réponse(s) acceptée(s)":"Accepted answer(s)","Explication / corrigé (optionnel)":"Explanation / answer key (optional)",
+  "Retour global (après réponse)":"Global feedback (after answering)",
+  // — Champs : hints —
+  "Une rangée par ligne, colonnes séparées par « | ». La 1ʳᵉ ligne = en-têtes.":"One row per line, columns separated by “|”. The first line = headers.",
+  "Une par ligne : <code>Titre | lien | description</code>":"One per line: <code>Title | link | description</code>",
+  "Une par ligne : <code>texte | x</code> pour une bonne réponse · <code>texte | x | retour</code> pour ajouter un feedback.":"One per line: <code>text | x</code> for a correct answer · <code>text | x | feedback</code> to add feedback.",
+  "Séparez les variantes par « | ».":"Separate variants with “|”.",
+  // — Champs : placeholders —
+  "Rédigez votre paragraphe…":"Write your paragraph…","Titre de section":"Section title",
+  "Premier point\nDeuxième point":"First point\nSecond point","Première étape\nDeuxième étape":"First step\nSecond step",
+  "Colonne A | Colonne B\nvaleur | valeur":"Column A | Column B\nvalue | value",
+  "Pour aller plus loin":"Further reading","Ex. Estimateur de volume de script":"E.g. Script volume estimator",
+  "À quoi doit servir cette interaction pour l'apprenant·e ?":"What should this interaction do for the learner?",
+  "Textes, valeurs, médias, exemples concrets à intégrer dans le module.":"Texts, values, media, concrete examples to include in the module.",
+  "Ce que l'apprenant·e voit, manipule, et obtient comme retour.":"What the learner sees, manipulates, and gets as feedback.",
+  "URL d'un module similaire, maquette, exemple…":"URL of a similar module, mockup, example…",
+  "Énoncé de la question":"Question wording","La question posée":"The question asked",
+  "ex. Quiz de fin de partie":"e.g. End-of-part quiz","ex. 2":"e.g. 2","ex. 440":"e.g. 440",
+  "réponse | variante":"answer | variant","Pourquoi cette réponse.":"Why this answer.",
+  "Synthèse affichée quelle que soit la réponse.":"Summary shown regardless of the answer.",
+  "Retour si cette réponse est choisie…":"Feedback if this answer is chosen…",
+  "Bonne réponse | x | Bravo\nMauvaise réponse | | Pas tout à fait":"Correct answer | x | Well done\nWrong answer | | Not quite",
+  // — Selects : options —
+  "Note":"Note","Conseil":"Tip","Attention":"Warning","Définition":"Definition","Exemple":"Example",
+  "Important":"Important","Besoin illustration":"Illustration needed",
+  "Gauche":"Left","Droite":"Right","Vrai":"True","Faux":"False",
+  "Choix multiple (1 bonne)":"Multiple choice (1 correct)","Choix multiples (plusieurs)":"Multiple response (several)",
+  "Réponse texte":"Text answer","Réponse numérique":"Numeric answer",
+  "— à préciser —":"— to specify —","Curseur / slider":"Slider","Glisser-déposer":"Drag and drop",
+  "Quiz interactif":"Interactive quiz","Simulation":"Simulation","Exploration cliquable":"Clickable exploration",
+  "Frise / timeline":"Timeline","Comparateur avant/après":"Before/after comparison","Autre":"Other",
+  // — Modales —
+  "Votre cours, prêt à envoyer":"Your course, ready to send",
+  "Voici votre travail transformé au format attendu par l'équipe du CNSMDP.\n      Cliquez sur <b>Télécharger le fichier</b> et envoyez-le à votre interlocuteur·rice. Tout y est : votre contenu,\n      vos ressources avec leurs références, vos extraits audio minutés et vos idées d'évaluation.":"Here is your work converted to the format expected by the CNSMDP team.\n      Click <b>Download the file</b> and send it to your contact. Everything is there: your content,\n      your resources with their references, your timed audio excerpts and your assessment ideas.",
+  "Copier":"Copy","Télécharger le fichier":"Download the file",
+  "Aperçu — vue approximative côté apprenant·e":"Preview — approximate learner view",
+  "Importer un document":"Import a document",
+  "Choisir un fichier…":"Choose a file…","Annuler":"Cancel","Insérer dans le chapitre":"Insert into the chapter",
+  "Markdown converti — relisez et corrigez si besoin":"Converted markdown — review and fix if needed",
+  // — Barre de formatage (tooltips) —
+  "Gras  **…**":"Bold  **…**","Italique  *…*":"Italic  *…*","Code  `…`":"Code  `…`",
+  "Lien  [texte](url)":"Link  [text](url)","Titre  ## …":"Heading  ## …","Sous-titre  ### …":"Subheading  ### …",
+  "Liste à puces  - …":"Bulleted list  - …","Liste numérotée  1. …":"Numbered list  1. …",
+  "Citation  > …":"Quote  > …","Formule  $…$ (LaTeX)":"Formula  $…$ (LaTeX)",
+  "Dictée vocale — parlez, le texte s'écrit":"Voice dictation — speak and the text appears",
+  // — Toasts barre d'outils / dictée —
+  "Cliquez d'abord dans un champ de texte":"Click in a text field first",
+  "Mise en forme de ligne réservée aux zones de texte":"Line formatting is reserved for text areas",
+  "La dictée vocale n'est pas disponible ici — essayez Google Chrome.":"Voice dictation is not available here — try Google Chrome.",
+  "Cliquez d'abord dans un champ de texte, puis lancez la dictée.":"Click in a text field first, then start dictation.",
+  "Microphone refusé — autorisez-le pour dicter.":"Microphone denied — allow it to dictate.",
+  "Dictée en cours — parlez. Recliquez sur 🎙 pour arrêter.":"Dictating — speak. Click 🎙 again to stop.",
+};
+
+function trLook(s){ if(s==null) return null; const v=TR[String(s).trim()]; return v==null?null:v; }
+function trHTML(el){ const v=trLook(el.innerHTML); if(v!=null){ if(el.getAttribute('data-fr')==null) el.setAttribute('data-fr',el.innerHTML); el.innerHTML=v; } }
+function trTail(el){ const ns=el.childNodes, n=ns[ns.length-1]; if(!n||n.nodeType!==3) return;
+  const raw=n.textContent, k=raw.trim(), v=trLook(k); if(v!=null){ if(el.getAttribute('data-fr-tail')==null) el.setAttribute('data-fr-tail',raw); n.textContent=raw.replace(k,v); } }
+function trAttrEl(el,name){ const cur=el.getAttribute(name); const v=trLook(cur); if(v!=null){ const store='data-fr-'+name; if(el.getAttribute(store)==null) el.setAttribute(store,cur); el.setAttribute(name,v); } }
+const TR_TEXT_SEL='.lab,.hint,.sec,.micro,.empty-note,.add-link,.add-blk-btn,.pv-bar-title,.pal-empty,.pal-search,.course-name,.wordmark em,.modal h3,.modal p.hint,.guide-link .lbl,.btn,option,label';
+function translateTree(root){ root=root||document; if(LANG!=='en') return;
+  root.querySelectorAll('.tip>div').forEach(trHTML);
+  root.querySelectorAll(TR_TEXT_SEL).forEach(trHTML);
+  // libellés de blocs (icône + texte) : on traduit le dernier nœud texte
+  root.querySelectorAll('.ctag, .pal-h, .hmenu-panel button').forEach(trTail);
+  root.querySelectorAll('.pal-btn>span:last-child').forEach(trHTML);
+  // nœuds fixes intro/conclusion de la sidebar
+  root.querySelectorAll('.node>.lbl').forEach(trHTML);
+  // attributs
+  root.querySelectorAll('[placeholder]').forEach(el=>trAttrEl(el,'placeholder'));
+  root.querySelectorAll('[title]').forEach(el=>trAttrEl(el,'title'));
+}
+function restoreTree(root){ root=root||document;
+  root.querySelectorAll('[data-fr]').forEach(el=>{ el.innerHTML=el.getAttribute('data-fr'); el.removeAttribute('data-fr'); });
+  root.querySelectorAll('[data-fr-tail]').forEach(el=>{ const ns=el.childNodes,n=ns[ns.length-1]; if(n&&n.nodeType===3) n.textContent=el.getAttribute('data-fr-tail'); el.removeAttribute('data-fr-tail'); });
+  ['placeholder','title'].forEach(name=>{ const store='data-fr-'+name;
+    root.querySelectorAll('['+store+']').forEach(el=>{ el.setAttribute(name,el.getAttribute(store)); el.removeAttribute(store); }); });
+}
+function updateLangBtn(){ const f=document.getElementById('langFr'),e=document.getElementById('langEn');
+  if(f) f.classList.toggle('on',LANG==='fr'); if(e) e.classList.toggle('on',LANG==='en'); }
+function applyLang(l){ LANG=(l==='en')?'en':'fr'; try{ localStorage.setItem('cnsmdp-atelier-lang',LANG); }catch(e){}
+  document.documentElement.lang=LANG; updateLangBtn();
+  if(LANG==='fr') restoreTree(document);
+  render(); syncBarGauge();
+  setSaveState(LANG==='en'?'Saved ✓':'Enregistré ✓');
+}
+
+/* ============================================================
    RENDU — SIDEBAR
    ============================================================ */
 function isActive(t){
@@ -911,7 +1132,7 @@ function refreshBadge(L){
 function findPart(id){ return state.parts.find(p=>p.id===id); }
 function findLesson(pid,lid){ const p=findPart(pid); return p? p.lessons.find(l=>l.id===lid):null; }
 
-function render(){ renderSidebar(); renderWork(); }
+function render(){ renderSidebar(); renderWork(); if(LANG==='en') translateTree(document); }
 function select(t){ selected=t; render();
   if(window.innerWidth<=860) document.querySelector('aside.nav').classList.remove('open');
   document.querySelector('main.work').scrollTop=0;
@@ -930,9 +1151,9 @@ function renderWork(){
 /* ---------- Vue : Introduction du cours ---------- */
 function viewIntro(){
   return `
-  <div class="crumb">Introduction</div>
-  <h1 class="page">Introduction du cours</h1>
-  <p class="hint">C'est le premier contact de l'apprenant·e avec votre cours. Elle doit donner envie et poser le cadre.</p>
+  <div class="crumb">${LL('Introduction','Introduction')}</div>
+  <h1 class="page">${LL('Introduction du cours','Course introduction')}</h1>
+  <p class="hint">${LL("C'est le premier contact de l'apprenant·e avec votre cours. Elle doit donner envie et poser le cadre.","This is the learner's first contact with your course. It should spark interest and set the frame.")}</p>
 
   <div class="tip"><span class="ic">✎</span><div><b>Avant tout, le cadre matériel.</b> Ces informations nous aident à dimensionner le projet.</div></div>
   <div class="row">
@@ -968,7 +1189,7 @@ function viewIntro(){
 function planRecap(){
   if(!state.parts.length) return `<p class="empty-note">Aucune partie pour l'instant. Ajoutez-en une dans le menu de gauche.</p>`;
   let h='<div>';
-  state.parts.forEach((p,i)=>{ h+=`<div class="summary-pill"><b>${esc(p.title||('Partie '+(i+1)))}</b> · ${p.lessons.length} chapitre(s)</div>`; });
+  state.parts.forEach((p,i)=>{ h+=`<div class="summary-pill"><b>${esc(p.title||(LL('Partie ','Part ')+(i+1)))}</b> · ${p.lessons.length} ${LL('chapitre(s)','chapter(s)')}</div>`; });
   return h+'</div>';
 }
 
@@ -980,7 +1201,7 @@ function viewPart(p){
   p.lessons.forEach(L=>{ totalWords+=lessonWordCount(L); });
   const [ptLo,ptHi]=estLearnerTime(totalWords);
   return `
-  <div class="crumb">Partie ${idx}</div>
+  <div class="crumb">${LL('Partie','Part')} ${idx}</div>
   <input class="txt" data-part="title" value="${esc(p.title)}" placeholder="Titre de la partie"
      style="font-family:var(--font-display);font-size:var(--text-xl);font-weight:600;border:none;padding-left:0;color:var(--ink)">
   <div class="hint" style="margin-top:6px">Une partie regroupe plusieurs chapitres et vise <b>1h30 à 2h</b> de temps apprenant.</div>
@@ -990,12 +1211,12 @@ function viewPart(p){
     <textarea class="txt" data-part="intention" placeholder="Présentation de la partie…">${esc(p.intention)}</textarea>
   </div>
   <div class="gauge">
-    <div class="top-line"><span class="count">≈ ${calcDuration(ptLo)}–${calcDuration(ptHi)} <small>temps apprenant · ${fmt(totalWords)} mots</small></span>
-      <span class="target">${p.lessons.length} chapitre(s) · cible 1h30–2h</span></div>
+    <div class="top-line"><span class="count">≈ ${calcDuration(ptLo)}–${calcDuration(ptHi)} <small>${LL('temps apprenant','learner time')} · ${fmt(totalWords)} ${LL('mots','words')}</small></span>
+      <span class="target">${p.lessons.length} ${LL('chapitre(s) · cible 1h30–2h','chapter(s) · target 1h30–2h')}</span></div>
     <div class="hint" style="margin:0">Cumul estimé des chapitres de cette partie, calculé sur le volume de texte écrit.</div>
   </div>
   <div class="add-block">
-    <button class="btn" onclick="addLesson('${p.id}')">+ Ajouter un chapitre</button>
+    <button class="btn" onclick="addLesson('${p.id}')">${LL('+ Ajouter un chapitre','+ Add a chapter')}</button>
     <button class="btn btn--danger" onclick="removePart('${p.id}')">Supprimer cette partie</button>
   </div>
   `;
@@ -1005,7 +1226,7 @@ function viewPart(p){
 function viewLesson(p,L){
   if(!L) return '';
   return `
-  <div class="crumb">${esc(p.title)} › Chapitre</div>
+  <div class="crumb">${esc(p.title)} › ${LL('Chapitre','Chapter')}</div>
   <input class="txt" data-l="title" value="${esc(L.title)}" placeholder="Titre du chapitre"
      style="font-family:var(--font-display);font-size:var(--text-2xl);font-weight:600;border:none;padding-left:0;color:var(--ink)">
 
@@ -1443,8 +1664,8 @@ function blockPalette(){
 /* ---------- Vue : Conclusion ---------- */
 function viewConclusion(){
   return `
-  <div class="crumb">Conclusion</div>
-  <h1 class="page">Conclusion du cours</h1>
+  <div class="crumb">${LL('Conclusion','Conclusion')}</div>
+  <h1 class="page">${LL('Conclusion du cours','Course conclusion')}</h1>
   <div class="field"><label class="lab">Bilan général</label>
     <div class="hint">Le fil rouge du cours, ce que l'apprenant·e a acquis, ouverture vers la pratique ou la suite.</div>
     <textarea class="txt big" data-c="text" placeholder="Votre conclusion…">${esc(state.conclusion.text)}</textarea></div>
@@ -1536,14 +1757,14 @@ function syncBarGauge(){
   const c=lessonWordCount(L); const [lo,hi]=targetRange(L.durationMin); const [eLo,eHi]=estLearnerTime(c);
   const pct=Math.min(100, hi? Math.round(c/hi*100):0);
   let cls='', verdict;
-  if(c===0) verdict='Commencez à rédiger : le temps apprenant estimé s\'affiche à mesure.';
-  else if(c<lo) verdict=`Visez ~${L.durationMin} min (au moins ${fmt(lo)} mots).`;
-  else if(c<=hi){ cls='ok'; verdict='Pile dans la cible du chapitre. 👌'; }
-  else { cls='over'; verdict='Riche — c\'est très bien ! Nous raccourcirons si besoin.'; }
+  if(c===0) verdict=LL('Commencez à rédiger : le temps apprenant estimé s\'affiche à mesure.','Start writing: the estimated learner time appears as you go.');
+  else if(c<lo) verdict=LL(`Visez ~${L.durationMin} min (au moins ${fmt(lo)} mots).`,`Aim for ~${L.durationMin} min (at least ${fmt(lo)} words).`);
+  else if(c<=hi){ cls='ok'; verdict=LL('Pile dans la cible du chapitre. 👌','Right on the chapter target. 👌'); }
+  else { cls='over'; verdict=LL('Riche — c\'est très bien ! Nous raccourcirons si besoin.','Rich — that\'s great! We\'ll trim if needed.'); }
   const tmin = eHi===0 ? (c>0?'< 1':'0') : `${eLo}–${eHi}`;
-  document.getElementById('bgTxt').innerHTML=`≈ <b>${tmin} min</b> · ${fmt(c)} mots`;
+  document.getElementById('bgTxt').innerHTML=`≈ <b>${tmin} min</b> · ${fmt(c)} ${LL('mots','words')}`;
   const fill=document.getElementById('bgFill'); fill.style.width=pct+'%'; fill.className='bg-fill '+cls;
-  bg.title=`${verdict} — cible ${L.durationMin} min (${fmt(lo)}–${fmt(hi)} mots).`;
+  bg.title=LL(`${verdict} — cible ${L.durationMin} min (${fmt(lo)}–${fmt(hi)} mots).`,`${verdict} — target ${L.durationMin} min (${fmt(lo)}–${fmt(hi)} words).`);
 }
 // Conservé pour les appels existants (saisie, durée) : alimente la jauge toolbar.
 function updateGauge(L){ syncBarGauge(); }
@@ -1551,9 +1772,9 @@ function updateGauge(L){ syncBarGauge(); }
    ACTIONS STRUCTURELLES
    ============================================================ */
 function addPart(){ state.parts.push(blankPart(state.parts.length+1)); markDirty(); const p=state.parts[state.parts.length-1]; select({type:'part',partId:p.id}); }
-function removePart(id){ if(!confirm('Supprimer cette partie et tous ses chapitres ?'))return; state.parts=state.parts.filter(p=>p.id!==id); selected={type:'intro'}; markDirty(); render(); }
+function removePart(id){ if(!confirm(LL('Supprimer cette partie et tous ses chapitres ?','Delete this part and all its chapters?')))return; state.parts=state.parts.filter(p=>p.id!==id); selected={type:'intro'}; markDirty(); render(); }
 function addLesson(pid){ const p=findPart(pid); const L=blankLesson(p.lessons.length+1); p.lessons.push(L); markDirty(); select({type:'lesson',partId:pid,lessonId:L.id}); }
-function removeLesson(pid,lid){ if(!confirm('Supprimer ce chapitre ?'))return; const p=findPart(pid); p.lessons=p.lessons.filter(l=>l.id!==lid); selected={type:'part',partId:pid}; markDirty(); render(); }
+function removeLesson(pid,lid){ if(!confirm(LL('Supprimer ce chapitre ?','Delete this chapter?')))return; const p=findPart(pid); p.lessons=p.lessons.filter(l=>l.id!==lid); selected={type:'part',partId:pid}; markDirty(); render(); }
 function curLesson(){ return findLesson(selected.partId,selected.lessonId); }
 function curBlock(id){ const L=curLesson(); return L? (L.blocks||[]).find(b=>b.id===id):null; }
 let _palOutside=null;
@@ -1919,15 +2140,15 @@ async function convertDocToMarkdown(file){
 }
 function openImport(){ document.getElementById('importOverlay').classList.add('show');
   const L=currentLesson();
-  setImportStatus(L ? 'Le contenu sera ajouté au chapitre « '+(L.title||'sans titre')+' ».'
-                    : 'Sélectionnez d’abord un chapitre dans le menu de gauche : l’import s’ajoute toujours à un chapitre.', !L);
+  setImportStatus(L ? LL('Le contenu sera ajouté au chapitre « '+(L.title||'sans titre')+' ».','The content will be added to the chapter “'+(L.title||'untitled')+'”.')
+                    : LL('Sélectionnez d’abord un chapitre dans le menu de gauche : l’import s’ajoute toujours à un chapitre.','Select a chapter from the left menu first: imports are always added to a chapter.'), !L);
   document.getElementById('importPreviewWrap').style.display='none'; document.getElementById('importInsert').disabled=true; }
 function closeImport(){ document.getElementById('importOverlay').classList.remove('show'); }
-function setImportStatus(t,err){ const el=document.getElementById('importStatus'); el.textContent=t||''; el.style.color=err?'var(--err-fg)':'var(--ink-soft)'; }
+function setImportStatus(t,err){ const el=document.getElementById('importStatus'); el.textContent=(LANG==='en'&&typeof TR!=='undefined'&&TR[t])?TR[t]:(t||''); el.style.color=err?'var(--err-fg)':'var(--ink-soft)'; }
 function pickImportFile(){ document.getElementById('importInput').click(); }
 async function runImport(file){
   if(!file) return;
-  setImportStatus('Conversion de « '+file.name+' » en cours…');
+  setImportStatus(LL('Conversion de « '+file.name+' » en cours…','Converting “'+file.name+'”…'));
   document.getElementById('importPreviewWrap').style.display='none';
   document.getElementById('importInsert').disabled=true;
   try{
@@ -1945,7 +2166,7 @@ function confirmImport(){
   const blocks=importMdToBlocks(text);
   if(!blocks.length){ setImportStatus('Rien à importer.', true); return; }
   L.blocks=(L.blocks||[]).concat(blocks);
-  closeImport(); render(); markDirty(); toast(blocks.length+' bloc(s) importé(s) dans « '+(L.title||'le chapitre')+' »');
+  closeImport(); render(); markDirty(); toast(LL(blocks.length+' bloc(s) importé(s) dans « '+(L.title||'le chapitre')+' »',blocks.length+' block(s) imported into “'+(L.title||'the chapter')+'”'));
 }
 
 /* ============================================================
@@ -2059,7 +2280,7 @@ function copyExport(){ navigator.clipboard.writeText(md()).then(()=>toast('Copi�
    ============================================================ */
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 let toastTimer=null;
-function toast(t){ const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),2200); }
+function toast(t){ const el=document.getElementById('toast'); el.textContent=(LANG==='en'&&typeof TR!=='undefined'&&TR[t])?TR[t]:t; el.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove('show'),2200); }
 document.getElementById('exportOverlay').addEventListener('click',e=>{ if(e.target.id==='exportOverlay') closeExport(); });
 document.getElementById('previewOverlay').addEventListener('click',e=>{ if(e.target.id==='previewOverlay') closePreview(); });
 document.getElementById('importOverlay').addEventListener('click',e=>{ if(e.target.id==='importOverlay') closeImport(); });
@@ -2222,7 +2443,7 @@ function toggleDictation(){
   rec.onerror=(e)=>{
     if(e.error==='not-allowed'||e.error==='service-not-allowed') toast('Microphone refusé — autorisez-le pour dicter.');
     else if(e.error==='no-speech') return; // silence : on laisse onend relancer
-    else toast('Dictée interrompue ('+e.error+').');
+    else toast(LL('Dictée interrompue ('+e.error+').','Dictation interrupted ('+e.error+').'));
     stopDictation();
   };
   rec.onend=()=>{
@@ -2244,7 +2465,7 @@ function finishDictation(){
 /* ============================================================
    INIT
    ============================================================ */
-initFmtBar(); restore(); render(); setSaveState('Prêt');
+initFmtBar(); restore(); render(); updateLangBtn(); document.documentElement.lang=LANG; setSaveState('Prêt');
 </script>
 </body>
 </html>
