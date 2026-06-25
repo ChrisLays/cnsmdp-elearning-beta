@@ -206,6 +206,21 @@
 
   /* Palette d'insertion — menu déroulant ancré au bouton */
   .palette-wrap{position:relative;margin:16px 0}
+  /* Points d'insertion entre les blocs (ajout à n'importe quelle position) */
+  .ins-slot{position:relative;height:14px;display:flex;align-items:center;justify-content:center}
+  .ins-slot::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--ink);opacity:0;transition:opacity .12s}
+  .ins-slot:hover::before,.ins-slot.open::before{opacity:.18}
+  .ins-plus{opacity:0;width:22px;height:22px;padding:0;border-radius:50%;border:1px solid var(--border-strong);
+    background:var(--surface);color:var(--ink-muted);font-size:15px;line-height:1;cursor:pointer;position:relative;z-index:1;
+    display:inline-flex;align-items:center;justify-content:center;transition:opacity .12s,background .12s,color .12s,border-color .12s}
+  .ins-slot:hover .ins-plus{opacity:1}
+  .ins-plus:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .ins-slot.open{height:auto;justify-content:flex-start;margin:6px 0}
+  /* Clic-pour-éditer : bloc en mode « vue » (rendu) vs « édition » */
+  .blk-view{cursor:text;border-radius:8px;padding:4px 6px;margin:-2px;min-height:24px;transition:background .12s}
+  .blk-view:hover{background:var(--surface-alt)}
+  .blk-empty{color:var(--ink-muted);font-style:italic}
+  .card.blk.editing{box-shadow:0 0 0 2px var(--ink) inset}
   .add-blk-btn{width:100%;justify-content:center;border-style:dashed;border-color:var(--border-strong);
     background:var(--surface);color:var(--ink-soft);font-weight:600}
   .add-blk-btn:hover{border-color:var(--ink);color:var(--ink)}
@@ -723,11 +738,13 @@ function blankPart(n){ return { id:nid(), title:'Partie '+n, intention:'', lesso
 
 let state = {
   meta:{ title:'Mon cours', authors:'', public:'', duration:'', date:new Date().toISOString().slice(0,10) },
-  intro:{ intentions:'', objectives:'', prerequis:'' },
+  intro:{ intentions:'', objectives:'', prerequis:'', blocks:[] },
   parts:[ blankPart(1) ],
   conclusion:{ text:'', essentiel:'' }
 };
 let selected = { type:'intro' };
+let insertAt = null;   // index où insérer un bloc (point « + » actif) ; null = palette fermée
+let editBlk = null;    // id du bloc en cours d'édition ; null = tous les blocs en mode « vue » (rendu)
 
 /* ============================================================
    PERSISTANCE
@@ -741,6 +758,7 @@ function markDirty(){
     localStorage.setItem(LS_KEY, JSON.stringify(state));
     setSaveState('Enregistré ✓');
   },500);
+  scheduleSnapshot();
 }
 // Écrit le brouillon immédiatement (sans attendre le debounce) — appelé à la fermeture.
 function flushSave(){
@@ -761,15 +779,40 @@ function courseHasContent(){
     return ls.length>1 || ls.some(L=>(L.blocks||[]).length>0);
   });
 }
+// — Historique annuler/rétablir : snapshots du state, coalescés (debounce 600 ms) —
+let undoPast=[], undoFuture=[], undoPresent=JSON.stringify(state), undoTimer=null;
+const HISTORY_MAX=60;
+function snapshotNow(){
+  clearTimeout(undoTimer); undoTimer=null;
+  const cur=JSON.stringify(state);
+  if(cur===undoPresent) return;
+  undoPast.push(undoPresent); if(undoPast.length>HISTORY_MAX) undoPast.shift();
+  undoPresent=cur; undoFuture=[]; refreshUndoButtons();
+}
+function scheduleSnapshot(){ clearTimeout(undoTimer); undoTimer=setTimeout(snapshotNow,600); }
+function resetHistory(){ clearTimeout(undoTimer); undoTimer=null; undoPast=[]; undoFuture=[]; undoPresent=JSON.stringify(state); refreshUndoButtons(); }
+function applyHistory(json){
+  clearTimeout(undoTimer); undoTimer=null;
+  state=JSON.parse(json); undoPresent=json;
+  try{ localStorage.setItem(LS_KEY,json); }catch(_){}
+  try{ render(); } catch(_){ selected={type:'intro'}; render(); } // on garde la place de l'expert ; repli sûr si le nœud sélectionné n'existe plus
+  refreshUndoButtons(); setSaveState('Enregistré ✓');
+}
+function undo(){ if(undoTimer) snapshotNow(); if(!undoPast.length) return; undoFuture.unshift(undoPresent); applyHistory(undoPast.pop()); toast(LANG==='en'?'Undone':'Annulé'); }
+function redo(){ if(!undoFuture.length) return; undoPast.push(undoPresent); applyHistory(undoFuture.shift()); toast(LANG==='en'?'Redone':'Rétabli'); }
+function refreshUndoButtons(){ const u=document.getElementById('undoBtn'),r=document.getElementById('redoBtn'); if(u)u.disabled=!undoPast.length; if(r)r.disabled=!undoFuture.length; }
 function setSaveState(t){ document.getElementById('saveState').textContent=(LANG==='en'&&typeof TR!=='undefined'&&TR[t])?TR[t]:t; }
 function restore(){
   const raw=localStorage.getItem(LS_KEY);
   if(raw){ try{ state=JSON.parse(raw); }catch(e){} }
   migrateState();
+  resetHistory();
 }
 // Convertit les anciens brouillons (sections/media/activities) vers le modèle
 // unifié lesson.blocks. Idempotent : ne touche pas une leçon déjà migrée.
 function migrateState(){
+  state.intro=state.intro||{intentions:'',objectives:'',prerequis:'',blocks:[]};
+  if(!Array.isArray(state.intro.blocks)) state.intro.blocks=[];
   (state.parts||[]).forEach(p=>(p.lessons||[]).forEach(L=>{
     // Renomme les titres auto « Leçon N » des anciens brouillons en « Chapitre N »
     // (sans toucher aux titres personnalisés saisis par l'expert).
@@ -964,7 +1007,7 @@ const TR = {
   "3 à 5 objectifs, un par ligne, commençant par un verbe d'action.":"3 to 5 objectives, one per line, starting with an action verb.",
   "Identifier…\nAnalyser…\nMettre en œuvre…":"Identify…\nAnalyse…\nImplement…",
   "Contenu du chapitre":"Chapter content",
-  "<b>Composez votre chapitre bloc par bloc.</b> Rédigez comme si vous dictiez le cours à un·e collègue —\n    ajoutez du texte, vos médias, des activités. Réordonnez avec ▲ ▼. La barre d'outils en haut met en forme le champ où vous écrivez.":"<b>Compose your chapter block by block.</b> Write as if dictating the course to a colleague —\n    add text, your media, activities. Reorder with ▲ ▼. The toolbar at the top formats the field you are writing in.",
+  "<b>Composez votre chapitre bloc par bloc.</b> Rédigez comme si vous dictiez le cours à un·e collègue —\n    ajoutez du texte, vos médias, des activités. Réordonnez avec ▲ ▼, ou insérez un bloc où vous voulez avec le + qui apparaît entre les blocs. La barre d'outils en haut met en forme le champ où vous écrivez.":"<b>Compose your chapter block by block.</b> Write as if dictating the course to a colleague —\n    add text, your media, activities. Reorder with ▲ ▼, or insert a block anywhere using the + that appears between blocks. The toolbar at the top formats the field you are writing in.",
   "Aucun bloc pour l'instant — ajoutez-en un ci-dessous.":"No block yet — add one below.",
   "+ Ajouter un bloc":"+ Add a block","Notes pour l'équipe":"Notes for the team",
   "Doutes, points à valider, médias à fournir plus tard… (ne sera pas montré à l'apprenant·e)":"Doubts, points to confirm, media to provide later… (not shown to the learner)",
@@ -1182,6 +1225,7 @@ function renderWork(){
   else if(selected.type==='lesson') w.innerHTML=viewLesson(findPart(selected.partId), findLesson(selected.partId,selected.lessonId));
   bindWork();
   syncBarGauge();
+  const blk=document.getElementById('blocks'); if(blk) typesetMath(blk); // rendu des formules dans les blocs en mode vue
 }
 
 /* ---------- Vue : Introduction du cours ---------- */
@@ -1204,6 +1248,14 @@ function viewIntro(){
     (une œuvre, une interprétation, une expérience), mettez plusieurs cas en relation, et creusez <b>une</b> problématique précise.
     Un cours <b>forme</b>, il n'informe pas seulement : visez des savoirs <i>et</i> des savoir-faire.</div></div>
   <div class="field"><textarea class="txt big" data-i="intentions" placeholder="Votre angle, votre problématique centrale, ce qui rend ce cours singulier…">${esc(state.intro.intentions)}</textarea></div>
+
+  <h2 class="sec">${LL('Contenu libre (optionnel)','Free content (optional)')}</h2>
+  <div class="hint">${LL("Pour enrichir l'introduction : un média, un encadré, une image, une formule… Optionnel.","To enrich the introduction: media, a callout, an image, a formula… Optional.")}</div>
+  <div id="blocks">${blocksWithSlots(state.intro.blocks||[])}</div>
+  <div class="palette-wrap">
+    <button class="btn add-blk-btn${insertAt===((state.intro.blocks||[]).length)?' is-open':''}" id="paletteToggle" onclick="openInsertAt(${(state.intro.blocks||[]).length})">+ ${LL('Ajouter un bloc','Add a block')}</button>
+    ${insertAt===((state.intro.blocks||[]).length)? blockPalette() : ''}
+  </div>
 
   <h2 class="sec">Objectifs généraux</h2>
   <div class="tip info"><span class="ic">◎</span><div>3 à 6 objectifs, <b>un par ligne</b>, chacun commençant par un <b>verbe d'action</b>.
@@ -1283,11 +1335,11 @@ Mettre en œuvre…">${esc(L.objectives)}</textarea></div>
 
   <h2 class="sec">Contenu du chapitre</h2>
   <div class="tip"><span class="ic">✎</span><div><b>Composez votre chapitre bloc par bloc.</b> Rédigez comme si vous dictiez le cours à un·e collègue —
-    ajoutez du texte, vos médias, des activités. Réordonnez avec ▲ ▼. La barre d'outils en haut met en forme le champ où vous écrivez.</div></div>
-  <div id="blocks">${(L.blocks&&L.blocks.length)? L.blocks.map((b,i)=>blockCard(b,i,L.blocks.length)).join('') : '<p class="empty-note">Aucun bloc pour l\'instant — ajoutez-en un ci-dessous.</p>'}</div>
+    ajoutez du texte, vos médias, des activités. Réordonnez avec ▲ ▼, ou insérez un bloc où vous voulez avec le + qui apparaît entre les blocs. La barre d'outils en haut met en forme le champ où vous écrivez.</div></div>
+  <div id="blocks">${blocksWithSlots(L.blocks)}</div>
   <div class="palette-wrap">
-    <button class="btn add-blk-btn" id="paletteToggle" onclick="togglePalette()">+ Ajouter un bloc</button>
-    ${blockPalette()}
+    <button class="btn add-blk-btn${insertAt===(L.blocks?L.blocks.length:0)?' is-open':''}" id="paletteToggle" onclick="openInsertAt(${L.blocks?L.blocks.length:0})">+ Ajouter un bloc</button>
+    ${insertAt===(L.blocks?L.blocks.length:0)? blockPalette() : ''}
   </div>
 
   <h2 class="sec">Notes pour l'équipe</h2>
@@ -1663,8 +1715,11 @@ Object.keys(BLOCKDEFS).forEach(k=>{ const def=BLOCKDEFS[k]; if(!def.blank) def.b
 // — Carte d'un bloc dans l'éditeur —
 function blockCard(b,i,total){
   const def=BLOCKDEFS[b.type]||BLOCKDEFS.paragraph;
-  const body= def.edit? def.edit(b.data,b.id) : editGeneric(def,b.data);
-  return `<div class="card blk" data-blk="${b.id}">
+  const editing=(b.id===editBlk);
+  const body= editing
+    ? (def.edit? def.edit(b.data,b.id) : editGeneric(def,b.data))
+    : `<div class="blk-view" onclick="editBlock('${b.id}')" title="${LL('Cliquer pour modifier','Click to edit')}">${blockViewHtml(b,def)}</div>`;
+  return `<div class="card blk${editing?' editing':''}" data-blk="${b.id}">
     <div class="card-head">
       <span class="ctag"><span class="blk-ic">${ICON(b.type)}</span> ${esc(def.label||b.type)}</span>
       <div class="blk-actions">
@@ -1676,13 +1731,28 @@ function blockCard(b,i,total){
     ${body}
   </div>`;
 }
+// Rendu « vue » d'un bloc (preview du bloc) ; placeholder si vide.
+function blockViewHtml(b,def){
+  let html=''; try{ html=def.preview(b.data||{})||''; }catch(_){ html=''; }
+  const bare=html.replace(/<[^>]+>/g,'').replace(/(&nbsp;|\s)/g,'');
+  if(!bare && !/<(img|iframe|audio|video|svg)/i.test(html))
+    html=`<div class="blk-empty">${LL('Cliquez pour rédiger ce bloc…','Click to write this block…')}</div>`;
+  return html;
+}
+// Passe un bloc en édition (un seul à la fois).
+function editBlock(id){
+  if(editBlk===id) return;
+  editBlk=id; renderWork();
+  const card=document.querySelector(`.blk[data-blk="${id}"]`);
+  if(card){ const f=card.querySelector('.txt'); if(f) f.focus(); }
+}
 // — Palette d'insertion, groupée par intention pédagogique —
 function blockPalette(){
   const C=window.BlockCatalog;
   const ids=(C&&C.EXPERT_IDS)?C.EXPERT_IDS.filter(id=>BLOCKDEFS[id]):Object.keys(BLOCKDEFS);
   const groups={}; ids.forEach(id=>{ const intent=(C&&C.byId(id)&&C.byId(id).intent)||'structure'; (groups[intent]=groups[intent]||[]).push(id); });
   const INT=(C&&C.INTENTS)||{}; const order=['structure','present','hook','practise','memorise','assess'];
-  let h=`<div class="palette" id="palette" hidden>`;
+  let h=`<div class="palette" id="palette">`;
   h+=`<input class="pal-search" id="palSearch" type="text" placeholder="Rechercher un bloc…" oninput="filterPalette(this.value)" autocomplete="off">`;
   h+=`<div class="pal-list">`;
   order.forEach(intent=>{ const list=groups[intent]; if(!list||!list.length) return;
@@ -1812,7 +1882,13 @@ function removePart(id){ if(!confirm(LL('Supprimer cette partie et tous ses chap
 function addLesson(pid){ const p=findPart(pid); const L=blankLesson(p.lessons.length+1); p.lessons.push(L); markDirty(); select({type:'lesson',partId:pid,lessonId:L.id}); }
 function removeLesson(pid,lid){ if(!confirm(LL('Supprimer ce chapitre ?','Delete this chapter?')))return; const p=findPart(pid); p.lessons=p.lessons.filter(l=>l.id!==lid); selected={type:'part',partId:pid}; markDirty(); render(); }
 function curLesson(){ return findLesson(selected.partId,selected.lessonId); }
-function curBlock(id){ const L=curLesson(); return L? (L.blocks||[]).find(b=>b.id===id):null; }
+// Conteneur de blocs courant : intro OU leçon (selon la vue active).
+function curBlocks(){
+  if(selected.type==='intro') return state.intro.blocks||(state.intro.blocks=[]);
+  if(selected.type==='lesson'){ const L=curLesson(); return L? (L.blocks||(L.blocks=[])) : null; }
+  return null;
+}
+function curBlock(id){ const bs=curBlocks(); return bs? bs.find(b=>b.id===id):null; }
 let _palOutside=null;
 function _palEsc(e){ if(e.key==='Escape') closePalette(); }
 function openPalette(){
@@ -1840,14 +1916,40 @@ function filterPalette(q){
   pop.querySelectorAll('.pal-group').forEach(g=>{ g.hidden=![...g.querySelectorAll('.pal-btn')].some(b=>!b.hidden); });
   const empty=pop.querySelector('.pal-empty'); if(empty) empty.hidden=any;
 }
-function addBlock(type){ const L=curLesson(); if(!L) return; closePalette(); L.blocks=L.blocks||[];
-  L.blocks.push(blankBlock(type)); markDirty(); renderWork(); refreshBadge(L);
-  const cards=document.querySelectorAll('#blocks .blk'); const last=cards[cards.length-1];
-  if(last){ last.scrollIntoView({block:'center',behavior:'smooth'}); const f=last.querySelector('.txt'); if(f) f.focus(); }
+// Liste des blocs avec un point d'insertion « + » avant chaque bloc.
+function blocksWithSlots(bs){
+  bs=bs||[];
+  if(!bs.length) return '<p class="empty-note">Aucun bloc pour l\'instant — ajoutez-en un ci-dessous.</p>';
+  return bs.map((b,i)=>insSlot(i)+blockCard(b,i,bs.length)).join('');
 }
-function removeBlock(id){ const L=curLesson(); L.blocks=L.blocks.filter(b=>b.id!==id); markDirty(); renderWork(); refreshBadge(L); }
-function moveBlock(id,dir){ const L=curLesson(); const i=L.blocks.findIndex(b=>b.id===id); const j=i+dir;
-  if(i<0||j<0||j>=L.blocks.length) return; const t=L.blocks[i]; L.blocks[i]=L.blocks[j]; L.blocks[j]=t; markDirty(); renderWork(); }
+function insSlot(i){
+  if(insertAt===i) return `<div class="ins-slot open">${blockPalette()}</div>`;
+  return `<div class="ins-slot"><button class="ins-plus" title="Insérer un bloc ici" aria-label="Insérer un bloc ici" onclick="openInsertAt(${i})">+</button></div>`;
+}
+// Ouvre/ferme la palette à la position i (toggle si on reclique au même endroit).
+function openInsertAt(i){
+  insertAt=(insertAt===i)?null:i;
+  renderWork();
+  if(insertAt!=null){ const s=document.getElementById('palSearch'); if(s) s.focus(); }
+}
+function closeInsert(){ if(insertAt!=null){ insertAt=null; renderWork(); } }
+function addBlock(type){ const bs=curBlocks(); if(!bs) return;
+  const at=(insertAt==null)? bs.length : insertAt;
+  const nb=blankBlock(type); bs.splice(at,0,nb);
+  insertAt=null; editBlk=nb.id; markDirty(); renderWork(); if(selected.type==='lesson') refreshBadge(curLesson());
+  const card=document.querySelectorAll('#blocks .blk')[at];
+  if(card){ card.scrollIntoView({block:'center',behavior:'smooth'}); const f=card.querySelector('.txt'); if(f) f.focus(); }
+}
+function removeBlock(id){
+  const bs=curBlocks(); if(!bs) return; const b=bs.find(x=>x.id===id);
+  const lab=(b&&BLOCKDEFS[b.type])?BLOCKDEFS[b.type].label:'';
+  const msg=(LANG==='en')?`Delete this block${lab?' ("'+lab+'")':''}?`:`Supprimer ce bloc${lab?' « '+lab+' »':''} ?`;
+  if(!confirm(msg)) return;
+  const i=bs.findIndex(x=>x.id===id); if(i>=0) bs.splice(i,1);
+  markDirty(); renderWork(); if(selected.type==='lesson') refreshBadge(curLesson());
+}
+function moveBlock(id,dir){ const bs=curBlocks(); if(!bs) return; const i=bs.findIndex(b=>b.id===id); const j=i+dir;
+  if(i<0||j<0||j>=bs.length) return; const t=bs[i]; bs[i]=bs[j]; bs[j]=t; markDirty(); renderWork(); }
 function addOptB(id){ const b=curBlock(id); if(!b) return; b.data.options=b.data.options||[]; b.data.options.push({text:'',correct:false,feedback:''}); markDirty(); renderWork(); }
 // QCM multi-questions : normalise l'ancien modèle plat puis ajoute option/question.
 function qcmNorm(d){ if(!Array.isArray(d.questions)||!d.questions.length){ d.questions=[{question:d.question||'',options:(d.options&&d.options.length)?d.options:[{text:'',correct:false,feedback:''},{text:'',correct:true,feedback:''}]}]; } return d.questions; }
@@ -1869,6 +1971,10 @@ function md(){
   // Intro
   out+=`:::slide_intro {title="${attr(m.title)}"}\n:::\n\n`;
   if(state.intro.intentions) out+=state.intro.intentions.trim()+'\n\n';
+  if((state.intro.blocks||[]).length){
+    out+=`<!-- intro-content -->\n\n`;   // sépare les intentions (texte) des blocs libres au reparse
+    (state.intro.blocks||[]).forEach(b=>{ const def=BLOCKDEFS[b.type]; if(def) out+=def.serialize(b.data||{})+'\n\n'; });
+  }
   const io=lines(state.intro.objectives);
   if(io.length){ out+=`:::objectifs {title="Objectifs du cours"}\n`+io.map(o=>'- '+o).join('\n')+`\n:::\n\n`; }
   if(state.parts.length){ out+=`:::plan {title="Plan"}\n`+state.parts.map((p,i)=>'- '+(p.title||('Partie '+(i+1)))).join('\n')+`\n:::\n\n`; }
@@ -2060,10 +2166,10 @@ function nativeToBlocks(raw){ return String(raw||'').split(/\n\s*\n/).map(c=>c.t
 // Reparse complet d'un .md atelier → state.
 function mdToState(text){
   const f=parseFront(text);
-  const st={ meta:f.meta, intro:{intentions:'',objectives:'',prerequis:''}, parts:[], conclusion:{text:'',essentiel:''} };
+  const st={ meta:f.meta, intro:{intentions:'',objectives:'',prerequis:'',blocks:[]}, parts:[], conclusion:{text:'',essentiel:''} };
   const toks=tokenizeMd(f.body);
-  let region='intro', part=null, lesson=null, lessonObjSet=false;
-  const add=t=>{ if(lesson) lesson.blocks.push({ id:nid(), type:t.type, data:t.data }); };
+  let region='intro', part=null, lesson=null, lessonObjSet=false, introContent=false;
+  const add=t=>{ if(lesson) lesson.blocks.push({ id:nid(), type:t.type, data:t.data }); else if(region==='intro') st.intro.blocks.push({ id:nid(), type:t.type, data:t.data }); };
   const append=(o,k,v)=>{ o[k]=(o[k]?o[k]+'\n\n':'')+String(v).trim(); };
   for(let i=0;i<toks.length;i++){ const tk=toks[i];
     if(tk.kind==='h1'){
@@ -2083,9 +2189,9 @@ function mdToState(text){
       }
       add({ type:'subheading', data:{ text:tk.text } }); continue;
     }
-    if(tk.kind==='comment'){ const nm=tk.text.match(/Notes pour l'équipe\s*:\s*([\s\S]*)$/); if(nm && lesson) lesson.notes=nm[1].trim(); continue; }
+    if(tk.kind==='comment'){ if(/intro-content/.test(tk.text)){ introContent=true; continue; } const nm=tk.text.match(/Notes pour l'équipe\s*:\s*([\s\S]*)$/); if(nm && lesson) lesson.notes=nm[1].trim(); continue; }
     if(tk.kind==='native'){
-      if(region==='intro' && !lesson){ append(st.intro,'intentions',tk.raw); continue; }
+      if(region==='intro' && !lesson){ if(introContent){ nativeToBlocks(tk.raw).forEach(add); } else { append(st.intro,'intentions',tk.raw); } continue; }
       if(region==='part' && part && !lesson){ append(part,'intention',tk.raw); continue; }
       if(region==='conclusion'){ append(st.conclusion,'text',tk.raw); continue; }
       nativeToBlocks(tk.raw).forEach(add); continue;
@@ -2228,14 +2334,15 @@ function mdBlock(s){
 function listHTML(s){ const ls=lines(s); return ls.length?('<ul>'+ls.map(x=>`<li>${mdInline(x)}</li>`).join('')+'</ul>'):''; }
 
 /* Aperçu du rendu sous le champ en cours d'édition (Phase B) — n'affecte jamais le MD. */
-const FMT_RE=/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]*\]\([^)]*\))|(^\s{0,3}#{1,3}\s)|(^\s*[-*]\s)|(^>\s)/m;
+const FMT_RE=/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$[^$\n]+\$|\[[^\]]*\]\([^)]*\))|(^\s{0,3}#{1,3}\s)|(^\s*[-*]\s)|(^>\s)/m;
 let _renduEl=null,_renduFor=null;
 function hasFmt(v){ return FMT_RE.test(v||''); }
 function showFieldRendu(ta){ if(!ta||ta.tagName!=='TEXTAREA') return; if(!_renduEl){ _renduEl=document.createElement('div'); _renduEl.className='field-rendu'; } updateFieldRendu(ta); }
 function updateFieldRendu(ta){ if(!_renduEl) return; const v=ta.value;
   if(!hasFmt(v)){ if(_renduEl.parentNode) _renduEl.remove(); _renduFor=null; return; }
   _renduEl.innerHTML='<div class="fr-lab">Aperçu du rendu</div>'+mdBlock(v);
-  if(ta.nextSibling!==_renduEl) ta.parentNode.insertBefore(_renduEl,ta.nextSibling); _renduFor=ta; }
+  if(ta.nextSibling!==_renduEl) ta.parentNode.insertBefore(_renduEl,ta.nextSibling); _renduFor=ta;
+  typesetMath(_renduEl); }
 function hideFieldRendu(){ if(_renduEl&&_renduEl.parentNode) _renduEl.remove(); _renduFor=null; }
 
 /* Menu « Fichier » du header */
@@ -2246,6 +2353,37 @@ function closeFileMenu(){ const m=document.getElementById('fileMenu'); if(!m) re
 document.addEventListener('click',e=>{ const m=document.getElementById('fileMenu'); if(m && m.classList.contains('open') && !m.contains(e.target)) closeFileMenu(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeFileMenu(); });
 
+// — Rendu des formules ($…$ / $$…$$) via KaTeX, chargé à la demande (CDN).
+//   Repli silencieux sur le texte brut hors-ligne. $…$ = syntaxe supportée en
+//   aval (ScormStack, cf. bridge) ; ici on l'affiche pour que l'expert la voie.
+let _katexState=0, _katexLoading=null; // 0=jamais, 1=en cours, 2=prêt, -1=indispo
+function ensureKatex(){
+  if(_katexState===2) return Promise.resolve(true);
+  if(_katexState===-1) return Promise.resolve(false);
+  if(_katexLoading) return _katexLoading;
+  if(!document.getElementById('katex-css')){
+    const l=document.createElement('link'); l.id='katex-css'; l.rel='stylesheet';
+    l.href='https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css'; document.head.appendChild(l);
+  }
+  _katexState=1;
+  _katexLoading=loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js')
+    .then(()=>loadScript('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js'))
+    .then(()=>{ _katexState=2; return true; })
+    .catch(()=>{ _katexState=-1; return false; });
+  return _katexLoading;
+}
+function typesetMath(el){
+  if(!el || !/\$[^$\n]+\$/.test(el.textContent||'')) return; // pas de formule → on ne charge rien
+  ensureKatex().then(ok=>{
+    if(!ok || typeof renderMathInElement!=='function') return;
+    try{ renderMathInElement(el,{ delimiters:[
+      {left:'$$',right:'$$',display:true},
+      {left:'$',right:'$',display:false},
+      {left:'\\[',right:'\\]',display:true},
+      {left:'\\(',right:'\\)',display:false}
+    ], throwOnError:false }); }catch(_){}
+  });
+}
 function renderPreview(){
   pvQ=0;
   const m=state.meta;
@@ -2303,6 +2441,7 @@ function openPreview(){
   document.getElementById('previewOverlay').classList.add('show');
   document.querySelector('#previewOverlay .pv-scroll').scrollTop=0;
   bindPreview();
+  typesetMath(document.getElementById('previewBody'));
 }
 function closePreview(){ document.getElementById('previewOverlay').classList.remove('show'); }
 
@@ -2358,16 +2497,45 @@ function initFmtBar(){
         `<button role="menuitem" onclick="closeFileMenu();openExport()"><span class="hm-ic">↗</span>Exporter pour le CNSMDP</button>`+
       `</div>`+
     `</div>`+
+    `<button class="barmenu-btn" id="undoBtn" title="Annuler (Ctrl+Z)" aria-label="Annuler" onclick="undo()" disabled>↶</button>`+
+    `<button class="barmenu-btn" id="redoBtn" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir" onclick="redo()" disabled>↷</button>`+
     `<div class="editbar-inner">`+FMT_BTNS.map(b=> b.act==='sep'
     ? '<span class="sep"></span>'
     : `<button type="button" class="fmtbtn${b.cls?' '+b.cls:''}" data-fmt="${b.act}" title="${b.title}" aria-label="${b.title}">${b.html}</button>`).join('')+
     `<div class="bar-gauge" id="barGauge" hidden><span class="bg-txt" id="bgTxt"></span><span class="bg-bar"><span class="bg-fill" id="bgFill"></span></span></div>`+
     `</div>`;
+  refreshUndoButtons();
   editBar.addEventListener('mousedown',e=>{ if(e.target.closest('.fmtbtn')) e.preventDefault(); }); // garder la sélection
   editBar.addEventListener('click',e=>{ const b=e.target.closest('[data-fmt]'); if(b) applyFmt(b.dataset.fmt); });
   document.addEventListener('focusin',e=>{ if(isEditable(e.target)){ fmtTarget=e.target; editBar.classList.add('armed'); showFieldRendu(e.target); } });
   document.addEventListener('input',e=>{ if(_renduFor && e.target===_renduFor) updateFieldRendu(e.target); });
   document.addEventListener('focusout',e=>{ if(e.target===_renduFor) hideFieldRendu(); });
+  // Clic-pour-éditer : quand le focus quitte la carte en édition, on repasse en mode vue (rendu).
+  document.addEventListener('focusout',()=>{
+    if(editBlk==null) return;
+    setTimeout(()=>{
+      if(editBlk==null) return;
+      const card=document.querySelector(`.blk[data-blk="${editBlk}"]`);
+      if(card && !card.contains(document.activeElement)){ editBlk=null; renderWork(); }
+    },0);
+  });
+  // Annuler/Rétablir au clavier — uniquement hors champ texte (on laisse l'annulation
+  // native de la frappe dans les inputs/textarea/contenteditable).
+  document.addEventListener('keydown',e=>{
+    if(!(e.metaKey||e.ctrlKey)) return;
+    const k=(e.key||'').toLowerCase(); if(k!=='z'&&k!=='y') return;
+    const t=e.target;
+    if(t&&(t.tagName==='TEXTAREA'||t.tagName==='INPUT'||t.isContentEditable)) return;
+    e.preventDefault();
+    if(k==='y'||e.shiftKey) redo(); else undo();
+  });
+  // Fermeture de la palette d'insertion : Échap + clic en dehors.
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeInsert(); });
+  document.addEventListener('mousedown',e=>{
+    if(insertAt==null) return;
+    if(e.target.closest('.palette')||e.target.closest('.ins-plus')||e.target.closest('#paletteToggle')) return;
+    closeInsert();
+  });
 }
 function applyFmt(act){
   if(act==='dictate'){ return toggleDictation(); }
