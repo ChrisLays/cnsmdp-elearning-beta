@@ -220,6 +220,12 @@
   .blk-view{cursor:text;border-radius:8px;padding:4px 6px;margin:-2px;min-height:24px;transition:background .12s}
   .blk-view:hover{background:var(--surface-alt)}
   .blk-empty{color:var(--ink-muted);font-style:italic}
+  /* Éléments Markdown rendus (liens, code, listes numérotées, citations) */
+  .blk-view a,.field-rendu a,.pv-body a,.pv-doc a,.pv-lead a{color:var(--cnsm-red,#7A1F2E);text-decoration:underline}
+  .blk-view code,.field-rendu code,.pv-body code,.pv-doc code{background:var(--surface-alt);border-radius:4px;padding:1px 5px;font-family:var(--font-mono,ui-monospace,monospace);font-size:.92em}
+  .blk-view blockquote,.field-rendu blockquote,.pv-body blockquote,.pv-doc blockquote{margin:8px 0;padding:3px 0 3px 14px;border-left:3px solid var(--border-strong);color:var(--ink-soft)}
+  .blk-view ol,.field-rendu ol,.pv-body ol,.pv-doc ol{margin:6px 0;padding-left:22px}
+  .blk-view ol li,.field-rendu ol li,.pv-body ol li,.pv-doc ol li{margin:3px 0}
   .card.blk.editing{box-shadow:0 0 0 2px var(--ink) inset}
   /* Blocs médias : lecteur embarqué + volet métadonnées repliable */
   .media-embed-wrap{margin:2px 0 8px}
@@ -2360,18 +2366,33 @@ function confirmImport(){
    ============================================================ */
 let pvQ=0;
 
+// Markdown inline → HTML sémantique. Complet et symétrique avec Turndown
+// (round-trip idempotent) : gras, italique (* et _), code, liens. Les $…$
+// (maths) et le `code` sont protégés du reste par des jetons temporaires.
 function mdInline(s){
-  return esc(s).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/\*([^*]+)\*/g,'<em>$1</em>');
+  s=esc(s); const st=[];
+  s=s.replace(/`([^`]+)`/g,(m,c)=>{ st.push('<code>'+c+'</code>'); return '\x00'+(st.length-1)+'\x00'; });
+  s=s.replace(/\$([^$\n]+)\$/g,(m)=>{ st.push(m); return '\x00'+(st.length-1)+'\x00'; });
+  s=s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
+  s=s.replace(/_([^_\n]+)_/g,'<em>$1</em>');
+  return s.replace(/\x00(\d+)\x00/g,(m,i)=>st[+i]);
 }
+// Markdown bloc → HTML sémantique (titres h2/h3, listes ul/ol, citation,
+// paragraphes). Sémantique = re-parsable par Turndown (round-trip stable).
 function mdBlock(s){
   if(!s||!s.trim()) return '';
   return s.trim().split(/\n{2,}/).map(blk=>{
     const t=blk.trim();
-    if(/^###\s+/.test(t)) return `<div class="pv-h3">${mdInline(t.replace(/^###\s+/,''))}</div>`;
-    if(/^##\s+/.test(t)) return `<div class="pv-h3">${mdInline(t.replace(/^##\s+/,''))}</div>`;
-    if(t.split('\n').every(l=>/^\s*[-*]\s+/.test(l))){
+    if(/^###\s+/.test(t)) return `<h3 class="pv-h3">${mdInline(t.replace(/^###\s+/,''))}</h3>`;
+    if(/^##\s+/.test(t)) return `<h2 class="pv-h3">${mdInline(t.replace(/^##\s+/,''))}</h2>`;
+    if(t.split('\n').every(l=>/^\s*[-*]\s+/.test(l)))
       return '<ul>'+t.split('\n').map(l=>`<li>${mdInline(l.replace(/^\s*[-*]\s+/,''))}</li>`).join('')+'</ul>';
-    }
+    if(t.split('\n').every(l=>/^\s*\d+\.\s+/.test(l)))
+      return '<ol>'+t.split('\n').map(l=>`<li>${mdInline(l.replace(/^\s*\d+\.\s+/,''))}</li>`).join('')+'</ol>';
+    if(t.split('\n').every(l=>/^\s*>\s?/.test(l)))
+      return '<blockquote>'+mdInline(t.split('\n').map(l=>l.replace(/^\s*>\s?/,'')).join(' '))+'</blockquote>';
     return `<p>${mdInline(t).replace(/\n/g,'<br>')}</p>`;
   }).join('');
 }
