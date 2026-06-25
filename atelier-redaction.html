@@ -221,6 +221,24 @@
   .blk-view:hover{background:var(--surface-alt)}
   .blk-empty{color:var(--ink-muted);font-style:italic}
   .card.blk.editing{box-shadow:0 0 0 2px var(--ink) inset}
+  /* Blocs médias : lecteur embarqué + volet métadonnées repliable */
+  .media-embed-wrap{margin:2px 0 8px}
+  .media-embed{max-width:100%;border-radius:8px;display:block}
+  audio.media-embed{width:100%}
+  video.media-embed{max-width:100%}
+  .media-frame{position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden;background:#000}
+  .media-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .media-pdf{width:100%;height:420px;border:1px solid var(--border)}
+  .media-cap{font-size:var(--text-sm);color:var(--ink-muted);margin-top:4px}
+  .media-empty{padding:16px;border:1px dashed var(--border-strong);border-radius:8px;color:var(--ink-muted);font-style:italic;text-align:center}
+  .media-link{display:inline-block;word-break:break-all}
+  .meta-fold{margin-top:6px;border-top:1px solid var(--border);padding-top:6px}
+  .meta-fold>summary{cursor:pointer;font-size:var(--text-sm);color:var(--ink-soft);font-weight:600;list-style:none}
+  .meta-fold>summary::-webkit-details-marker{display:none}
+  .meta-fold>summary::before{content:"▸ ";color:var(--ink-muted)}
+  .meta-fold[open]>summary::before{content:"▾ "}
+  .meta-hint{font-weight:400;color:var(--ink-muted)}
+  .meta-body{padding-top:8px}
   .add-blk-btn{width:100%;justify-content:center;border-style:dashed;border-color:var(--border-strong);
     background:var(--surface);color:var(--ink-soft);font-weight:600}
   .add-blk-btn:hover{border-color:var(--ink);color:var(--ink)}
@@ -1712,13 +1730,39 @@ const BLOCKDEFS={
 // Complète les blank() manquants à partir des fields.
 Object.keys(BLOCKDEFS).forEach(k=>{ const def=BLOCKDEFS[k]; if(!def.blank) def.blank=()=>blankFromFields(def); });
 
+// — Blocs médias : lecteur embarqué + volet repliable « Métadonnées » —
+const MEDIA_TYPES=new Set(['video_expert','video','audio','image','image_with_text','pdf']);
+function ytId(u){ const m=String(u||'').match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)([\w-]{11})/); return m?m[1]:null; }
+function vimeoId(u){ const m=String(u||'').match(/vimeo\.com\/(?:video\/)?(\d+)/); return m?m[1]:null; }
+function mediaEmbed(type,d){
+  const src=((d&&d.src)||'').trim();
+  if(!src) return `<div class="media-empty">${LL('Aucun média — ajoutez un lien dans « Métadonnées ».','No media — add a link under « Metadata ».')}</div>`;
+  if(type==='image'||/\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/i.test(src)) return `<img class="media-embed" src="${esc(src)}" alt="${esc(d.alt||'')}">${d.caption?`<div class="media-cap">${esc(d.caption)}</div>`:''}`;
+  if(type==='audio'||/\.(mp3|wav|ogg|m4a|aac|flac)(\?|#|$)/i.test(src)) return `<audio class="media-embed" controls src="${esc(src)}"></audio>`;
+  if(type==='pdf'||/\.pdf(\?|#|$)/i.test(src)) return `<iframe class="media-embed media-pdf" src="${esc(src)}" loading="lazy"></iframe>`;
+  const yt=ytId(src); if(yt) return `<div class="media-frame"><iframe src="https://www.youtube-nocookie.com/embed/${yt}" allowfullscreen loading="lazy"></iframe></div>`;
+  const vi=vimeoId(src); if(vi) return `<div class="media-frame"><iframe src="https://player.vimeo.com/video/${vi}" allowfullscreen loading="lazy"></iframe></div>`;
+  if(/\.(mp4|webm|ogv|mov)(\?|#|$)/i.test(src)) return `<video class="media-embed" controls src="${esc(src)}"></video>`;
+  return `<a class="media-link" href="${esc(src)}" target="_blank" rel="noopener">↗ ${esc(src)}</a>`;
+}
+// Carte média : le lecteur en haut, les métadonnées dans un <details> repliable.
+function mediaCard(b,def){
+  const open=(b.data&&b.data.src)?'':' open';   // si pas de source : déplié pour inviter à la saisir
+  return `<div class="media-embed-wrap">${mediaEmbed(b.type,b.data||{})}</div>`
+    +`<details class="meta-fold"${open}><summary>${LL('Métadonnées','Metadata')} <span class="meta-hint">${LL('titre, source…','title, source…')}</span></summary>`
+    +`<div class="meta-body">${def.edit?def.edit(b.data,b.id):editGeneric(def,b.data)}</div></details>`;
+}
+
 // — Carte d'un bloc dans l'éditeur —
 function blockCard(b,i,total){
   const def=BLOCKDEFS[b.type]||BLOCKDEFS.paragraph;
-  const editing=(b.id===editBlk);
-  const body= editing
-    ? (def.edit? def.edit(b.data,b.id) : editGeneric(def,b.data))
-    : `<div class="blk-view" onclick="editBlock('${b.id}')" title="${LL('Cliquer pour modifier','Click to edit')}">${blockViewHtml(b,def)}</div>`;
+  const isMedia=MEDIA_TYPES.has(b.type);
+  const editing=(b.id===editBlk) && !isMedia;
+  const body= isMedia
+    ? mediaCard(b,def)
+    : editing
+      ? (def.edit? def.edit(b.data,b.id) : editGeneric(def,b.data))
+      : `<div class="blk-view" onclick="editBlock('${b.id}')" title="${LL('Cliquer pour modifier','Click to edit')}">${blockViewHtml(b,def)}</div>`;
   return `<div class="card blk${editing?' editing':''}" data-blk="${b.id}">
     <div class="card-head">
       <span class="ctag"><span class="blk-ic">${ICON(b.type)}</span> ${esc(def.label||b.type)}</span>
