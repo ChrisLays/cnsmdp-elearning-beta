@@ -732,14 +732,34 @@ let selected = { type:'intro' };
 /* ============================================================
    PERSISTANCE
    ============================================================ */
-let saveTimer=null;
+let saveTimer=null, exportedClean=true;   // exportedClean : true tant que le travail courant a été téléchargé en .md (ou cours vide)
 function markDirty(){
+  exportedClean=false;
   setSaveState('Enregistrement…');
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{
     localStorage.setItem(LS_KEY, JSON.stringify(state));
     setSaveState('Enregistré ✓');
   },500);
+}
+// Écrit le brouillon immédiatement (sans attendre le debounce) — appelé à la fermeture.
+function flushSave(){
+  if(!saveTimer) return;
+  clearTimeout(saveTimer); saveTimer=null;
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(_){}
+}
+// Le cours contient-il un vrai travail (≠ cours vierge par défaut) ?
+function courseHasContent(){
+  const m=state.meta||{};
+  if(m.title && m.title!=='Mon cours') return true;
+  const i=state.intro||{}; if(i.intentions||i.objectives||i.prerequis) return true;
+  const c=state.conclusion||{}; if(c.text||c.essentiel) return true;
+  const parts=state.parts||[];
+  if(parts.length>1) return true;
+  return parts.some(p=>{
+    const ls=p.lessons||[];
+    return ls.length>1 || ls.some(L=>(L.blocks||[]).length>0);
+  });
 }
 function setSaveState(t){ document.getElementById('saveState').textContent=(LANG==='en'&&typeof TR!=='undefined'&&TR[t])?TR[t]:t; }
 function restore(){
@@ -797,6 +817,7 @@ function saveProject(){
   // Format de projet = Markdown (grammaire de référence), réouvrable via « Charger ».
   const blob=new Blob([md()],{type:'text/markdown'});
   triggerDownload(blob, slug(state.meta.title)+'.md');
+  exportedClean=true;
   toast('Cours enregistré au format Markdown (.md)');
 }
 function loadProject(){
@@ -806,8 +827,19 @@ function loadProject(){
     const name=(f.name||'').toLowerCase();
     const r=new FileReader();
     r.onload=()=>{ try{
-        // .atelier.json (héritage) → JSON ; .md → reparse via la grammaire.
-        state = name.endsWith('.json') ? JSON.parse(r.result) : mdToState(r.result);
+        // 1) On parse D'ABORD dans une variable temporaire : un fichier illisible
+        //    ne doit jamais écraser le travail en cours.
+        const next = name.endsWith('.json') ? JSON.parse(r.result) : mdToState(r.result);
+        // 2) Garde-fou : si un cours est déjà ouvert, on confirme avant de l'écraser.
+        if(courseHasContent()){
+          const msg = (LANG==='en')
+            ? 'Loading this file will replace the course currently open. Download it first if you want to keep it. Continue?'
+            : 'Charger ce fichier va remplacer le cours en cours. Pensez à le télécharger d’abord si vous voulez le garder. Continuer ?';
+          if(!confirm(msg)){ toast(LANG==='en'?'Loading cancelled':'Chargement annulé'); return; }
+        }
+        // 3) Filet de sécurité : on garde une copie du brouillon écrasé (clé -prev).
+        try{ const cur=localStorage.getItem(LS_KEY); if(cur) localStorage.setItem(LS_KEY+'-prev', cur); }catch(_){}
+        state = next;
         migrateState(); selected={type:'intro'}; render(); markDirty();
         toast(name.endsWith('.json')?'Brouillon chargé':'Cours chargé (.md)');
       } catch(err){ console.error(err); toast('Fichier illisible'); } };
@@ -820,6 +852,16 @@ function triggerDownload(blob,name){
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 function slug(s){ return (s||'cours').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'cours'; }
+
+// Anti-perte de travail à la fermeture :
+//  - pagehide : flush immédiat du brouillon (aucune frappe perdue dans le debounce) ;
+//  - beforeunload : avertit si le cours a du contenu jamais téléchargé en .md
+//    (le localStorage est la seule copie ; un nettoyage de cache l'effacerait).
+window.addEventListener('pagehide', flushSave);
+window.addEventListener('beforeunload', (e)=>{
+  flushSave();
+  if(!exportedClean && courseHasContent()){ e.preventDefault(); e.returnValue=''; return ''; }
+});
 
 /* ============================================================
    HELPERS DE COMPTAGE
