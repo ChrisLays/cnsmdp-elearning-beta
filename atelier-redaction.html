@@ -1182,16 +1182,27 @@ async function copyAssetToFolder(file){
 // Point d'entrée du glisser-déposer et du bouton « Parcourir ».
 async function attachAsset(file){
   if(!file) return null;
-  if(FS_OK){
-    if(!dirHandle && !await pickCourseFolder()) return fallbackAsset(file);
-    if(!await dirAccess(true)) return fallbackAsset(file);
-    try{
-      const rel=await copyAssetToFolder(file);
-      toast((LANG==='en'?'Copied to ':'Copié dans ')+dirLabel+'/'+rel);
-      return rel;
-    }catch(e){ console.error('Copie impossible :',e); return fallbackAsset(file); }
+  const rel=await placeAsset(file);
+  // L'aperçu ne dépend PAS de la copie : on garde le fichier déposé en mémoire et
+  // on l'affiche tout de suite. Sans ça, le moindre accroc côté dossier (permission
+  // refusée, copie échouée, dossier non désigné) se traduisait par un écran muet.
+  if(rel){ try{ assetUrlCache.set(rel, URL.createObjectURL(file)); }catch(_){} }
+  return rel;
+}
+async function placeAsset(file){
+  if(!FS_OK) return fallbackAsset(file);
+  if(!dirHandle && !await pickCourseFolder()) return fallbackAsset(file);
+  if(!await dirAccess(true)) return fallbackAsset(file);
+  try{
+    const rel=await copyAssetToFolder(file);
+    toast((LANG==='en'?'Copied to ':'Copié dans ')+dirLabel+'/'+rel);
+    return rel;
+  }catch(e){
+    // On dit ce qui a échoué au lieu de retomber silencieusement sur le repli.
+    console.error('Copie impossible :',e);
+    toast((LANG==='en'?'Copy failed: ':'Copie impossible : ')+(e&&e.message?e.message:e));
+    return fallbackAsset(file);
   }
-  return fallbackAsset(file);
 }
 // Repli : on note le chemin attendu, sans copier — l'expert transmet le média à part.
 function fallbackAsset(file){
