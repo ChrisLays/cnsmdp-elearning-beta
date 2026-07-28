@@ -460,7 +460,7 @@
   <button class="btn btn--ghost btn--sm menu-btn" onclick="document.querySelector('aside.nav').classList.toggle('open')">☰</button>
   <span class="wordmark">CNSMDP <em>Atelier de rédaction</em></span>
   <span class="spacer"></span>
-  <button class="file-chip" id="fileChip" hidden onclick="saveNow()"></button>
+  <button class="file-chip" id="fileChip" hidden onclick="chipAction()"></button>
   <span class="save-state" id="saveState">—</span>
   <div class="lang-switch" id="langSwitch" title="Langue de l'interface / Interface language">
     <button id="langFr" class="on" onclick="applyLang('fr')">FR</button>
@@ -990,6 +990,7 @@ async function writeToFile(){
     const w=await fileHandle.createWritable();
     await w.write(md()); await w.close();
     diskDirty=false; lastDiskAt=new Date(); setFileChip();
+    await flushPendingAssets(true);   // les médias en attente suivent le cours
     return true;
   }catch(e){ console.error('Écriture disque impossible :',e); fileGranted=false; setFileChip(); return false; }
   finally{ diskBusy=false; }
@@ -1001,7 +1002,11 @@ function scheduleDiskSave(){
 }
 // ⌘S / Ctrl+S / clic sur la pastille / « Enregistrer ».
 async function saveNow(){
+  // Un dossier de médias est désigné mais aucun fichier lié : le cours va dedans,
+  // pas ailleurs — sinon ses liens assets/… seraient faux dès le départ.
+  if(!fileHandle && dirHandle) return void await saveCourseIntoFolder();
   if(!fileHandle) return saveAs();
+  await flushPendingAssets(false);
   if(!await ensureAccess(true)){
     toast(LANG==='en'?'File access denied — use “Save as…”':'Accès au fichier refusé — utilisez « Enregistrer sous… »');
     return;
@@ -1062,6 +1067,15 @@ function applyLoadedText(text,name){
 function setFileChip(){
   const el=document.getElementById('fileChip'); if(!el) return;
   const en=(LANG==='en');
+  // Un média jamais écrit sur le disque prime sur tout le reste : c'est le seul
+  // cas où le cours référence un fichier qui n'existe pas.
+  if(pendingAssets.size){
+    el.hidden=false; el.className='file-chip warn';
+    el.textContent='⚠ '+pendingAssets.size+(en?' media not saved — click to save':' média(s) non enregistré(s) — cliquez pour enregistrer');
+    el.title=en?'These media exist only in this browser. Designate a media folder to write them to disk.'
+               :'Ces médias n’existent que dans ce navigateur. Désignez un dossier de médias pour les écrire sur le disque.';
+    return;
+  }
   if(fileHandle){
     el.hidden=false;
     if(!fileGranted){
@@ -1085,6 +1099,12 @@ function setFileChip(){
     el.title=en?'This course only exists in this browser. Click to save it to a file.'
                :'Ce cours n’existe que dans ce navigateur. Cliquez pour l’enregistrer dans un fichier.';
   } else { el.hidden=true; }
+}
+// La pastille répare ce qu'elle signale : des médias en attente sans dossier
+// demandent un dossier, tout le reste demande un enregistrement.
+async function chipAction(){
+  if(pendingAssets.size && !dirHandle) return void await chooseCourseFolder();
+  await saveNow();
 }
 // Rappel unique après 2 min de travail non relié à un fichier.
 function maybeNudge(){
@@ -1122,6 +1142,7 @@ async function restoreFileLink(){
 let dirHandle=null, dirLabel=null;
 const ASSETS_DIR='assets';
 const assetUrlCache=new Map();   // lien relatif → blob: URL (aperçu)
+const pendingAssets=new Map();   // lien relatif → {file,tries} pas encore écrit sur le disque
 
 async function dirAccess(ask){
   if(!dirHandle) return false;
@@ -1147,7 +1168,10 @@ async function pickCourseFolder(){
 }
 // Entrée de menu : désigner (ou changer) le dossier, puis rafraîchir les aperçus.
 async function chooseCourseFolder(){
-  if(await pickCourseFolder()) renderWork();
+  if(!await pickCourseFolder()) return;
+  await flushPendingAssets(false);   // tout ce qui attendait un dossier part maintenant
+  await ensureCourseInFolder();
+  renderWork();
 }
 async function restoreDirLink(){
   if(!FS_OK) return;
@@ -1204,12 +1228,81 @@ async function placeAsset(file){
     return fallbackAsset(file);
   }
 }
-// Repli : on note le chemin attendu, sans copier — l'expert transmet le média à part.
+// Repli : le média n'a pas pu être écrit. On le garde en attente pour le réécrire
+// dès qu'un dossier est disponible — sans ça, le cours gardait un lien vers un
+// fichier qui n'a jamais existé, et l'aperçu en mémoire masquait le problème.
 function fallbackAsset(file){
-  toast(LANG==='en'?'Filename noted — send the media file separately'
-                   :'Nom du fichier noté — transmettez le média séparément');
   const {base,ext}=safeAssetName(file.name);
-  return ASSETS_DIR+'/'+base+ext;
+  const rel=ASSETS_DIR+'/'+base+ext;
+  pendingAssets.set(rel,{file,tries:0});
+  toast(FS_OK ? (LANG==='en'?'Media kept aside — it will be written on the next save'
+                            :'Média mis de côté — il sera écrit au prochain enregistrement')
+              : (LANG==='en'?'Filename noted — send the media file separately'
+                            :'Nom du fichier noté — transmettez le média séparément'));
+  return rel;
+}
+// Réécrit les médias en attente dans le dossier de cours. `auto` limite le nombre
+// de tentatives : un média qui échoue systématiquement ne doit pas relancer une
+// écriture toutes les 3 s en boucle (il reste réessayé à chaque ⌘S explicite).
+async function flushPendingAssets(auto){
+  if(!dirHandle || !pendingAssets.size) return 0;
+  if(!await dirAccess(false)) return 0;
+  let n=0;
+  for(const [rel,entry] of [...pendingAssets]){
+    if(auto && entry.tries>=5) continue;
+    entry.tries++;
+    try{
+      const finalRel=await copyAssetToFolder(entry.file);
+      pendingAssets.delete(rel);
+      // copyAssetToFolder ne réécrit jamais par-dessus un média existant : si le nom
+      // a dû être décalé, on retrouve les blocs qui pointaient sur l'ancien.
+      if(finalRel!==rel) retargetAsset(rel,finalRel);
+      n++;
+    }catch(e){ console.error('Média non écrit :',rel,e); }
+  }
+  if(n) toast(n+(LANG==='en'?' media saved to the folder':' média(s) enregistré(s) dans le dossier'));
+  setFileChip();
+  return n;
+}
+// Fait suivre un changement de nom de fichier à tous les blocs qui le référencent.
+function retargetAsset(oldRel,newRel){
+  const url=assetUrlCache.get(oldRel);
+  if(url){ assetUrlCache.delete(oldRel); assetUrlCache.set(newRel,url); }
+  const visit=blocks=>(blocks||[]).forEach(b=>{
+    const d=b.data||{};
+    ['src','referenceUrl','assetUrl'].forEach(k=>{ if(d[k]===oldRel) d[k]=newRel; });
+  });
+  visit((state.intro||{}).blocks);
+  visit((state.conclusion||{}).blocks);
+  (state.parts||[]).forEach(p=>(p.lessons||[]).forEach(L=>visit(L.blocks)));
+}
+// Le cours et ses médias doivent vivre dans le même dossier : les liens écrits
+// dans le Markdown (assets/photo.png) sont relatifs au .md. Un cours enregistré
+// ailleurs que dans son dossier de médias pointe vers le vide.
+async function saveCourseIntoFolder(){
+  if(!dirHandle) return false;
+  if(!await dirAccess(true)) return false;
+  try{
+    const h=await dirHandle.getFileHandle(slug(state.meta.title)+'.md',{create:true});
+    await linkHandle(h);
+    clearTimeout(diskTimer); diskTimer=null;
+    const ok=await writeToFile();
+    if(ok) toast((LANG==='en'?'Course saved in ':'Cours enregistré dans ')+dirLabel+'/'+fileLabel);
+    return ok;
+  }catch(e){ console.error(e); toast(LANG==='en'?'Could not save into that folder':'Enregistrement impossible dans ce dossier'); return false; }
+}
+// Appelé après avoir désigné un dossier : aligne le cours dessus.
+async function ensureCourseInFolder(){
+  if(!dirHandle) return;
+  if(!fileHandle) return void await saveCourseIntoFolder();   // pas encore de fichier : on le crée ici
+  // Fichier déjà lié : est-il DANS ce dossier ? `resolve` renvoie null sinon.
+  let dedans=true;
+  try{ if(dirHandle.resolve) dedans = (await dirHandle.resolve(fileHandle))!==null; }catch(_){}
+  if(dedans) return;
+  const msg = (LANG==='en')
+    ? 'Your course file is saved outside this media folder, so links like assets/photo.png will not resolve. Save the course into this folder?'
+    : 'Votre cours est enregistré hors de ce dossier de médias : les liens « assets/photo.png » ne pointeront sur rien. Enregistrer le cours dans ce dossier ?';
+  if(confirm(msg)) await saveCourseIntoFolder();
 }
 // Aperçu d'un lien relatif : relit le média dans le dossier de cours.
 async function assetPreviewUrl(rel){
