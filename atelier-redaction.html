@@ -39,6 +39,13 @@
   .wordmark em{font-style:italic;font-weight:400;font-size:var(--text-sm);color:#cbd5e1;margin-left:6px}
   .top .spacer{flex:1}
   .top .save-state{font-size:var(--text-sm);color:#9ca3af;font-family:var(--font-mono)}
+  /* Pastille « fichier sur le disque » — dit à tout moment où vit la copie de référence. */
+  .top .file-chip{display:inline-flex;align-items:center;gap:6px;max-width:340px;overflow:hidden;
+    white-space:nowrap;text-overflow:ellipsis;font-family:var(--font-ui);font-size:var(--text-xs);
+    color:#d1d5db;background:#1f2937;border:1px solid #374151;border-radius:6px;padding:5px 10px;cursor:pointer}
+  .top .file-chip:hover{background:#374151;color:#fff}
+  .top .file-chip.warn{color:#fcd34d;background:#2a1e05;border-color:#78350f}
+  .top .file-chip.warn:hover{background:#3d2c07;color:#fde68a}
   .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;font-family:var(--font-ui);
     font-size:var(--text-sm);font-weight:500;border-radius:var(--radius-sm);cursor:pointer;border:1px solid transparent;
     background:var(--surface);color:var(--ink);border-color:var(--border-strong);transition:all .12s;white-space:nowrap}
@@ -64,6 +71,8 @@
     color:var(--ink,#1a1a1a);cursor:pointer}
   .hmenu-panel button:hover{background:#f0f0ee}
   .hmenu-panel .hm-ic{width:16px;text-align:center;opacity:.7}
+  .hmenu-panel .hm-key{order:3;margin-left:auto;padding-left:16px;font-family:var(--font-mono);
+    font-size:var(--text-xs);color:#9ca3af}
   .hmenu-panel .hm-sep{height:1px;background:#e5e5e3;margin:4px 2px}
   /* Bascule de langue FR | EN */
   .lang-switch{display:inline-flex;border:1px solid #374151;border-radius:7px;overflow:hidden}
@@ -416,6 +425,7 @@
   <button class="btn btn--ghost btn--sm menu-btn" onclick="document.querySelector('aside.nav').classList.toggle('open')">☰</button>
   <span class="wordmark">CNSMDP <em>Atelier de rédaction</em></span>
   <span class="spacer"></span>
+  <button class="file-chip" id="fileChip" hidden onclick="saveNow()"></button>
   <span class="save-state" id="saveState">—</span>
   <div class="lang-switch" id="langSwitch" title="Langue de l'interface / Interface language">
     <button id="langFr" class="on" onclick="applyLang('fr')">FR</button>
@@ -773,9 +783,10 @@ let editBlk = null;    // id du bloc en cours d'édition ; null = tous les blocs
 /* ============================================================
    PERSISTANCE
    ============================================================ */
-let saveTimer=null, exportedClean=true;   // exportedClean : true tant que le travail courant a été téléchargé en .md (ou cours vide)
+let saveTimer=null;
+let diskDirty=false;   // true dès qu'une modification n'est plus garantie présente dans le fichier disque
 function markDirty(){
-  exportedClean=false;
+  diskDirty=true;
   setSaveState('Enregistrement…');
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{
@@ -783,6 +794,9 @@ function markDirty(){
     setSaveState('Enregistré ✓');
   },500);
   scheduleSnapshot();
+  scheduleDiskSave();   // enregistrement automatique dans le fichier lié (si lien actif)
+  setFileChip();
+  maybeNudge();
 }
 // Écrit le brouillon immédiatement (sans attendre le debounce) — appelé à la fermeture.
 function flushSave(){
@@ -880,36 +894,198 @@ function migrateLesson(L){
   delete L.aRetenir; delete L.allerPlusLoin; delete L.resources;
 }
 
-function saveProject(){
-  // Format de projet = Markdown (grammaire de référence), réouvrable via « Charger ».
+/* ============================================================
+   FICHIER SUR LE DISQUE
+   ============================================================
+   Le localStorage n'est qu'un cache de travail : il disparaît avec un nettoyage
+   de cache, ne suit pas l'expert d'un navigateur ou d'un poste à l'autre, et
+   n'est pas sauvegardable. La copie de référence doit être un vrai fichier .md
+   sur son disque (ou son cloud synchronisé).
+     · Chrome / Edge : lien direct vers le fichier via File System Access API —
+       ⌘S/Ctrl+S réécrit LE MÊME fichier, et l'enregistrement automatique le tient
+       à jour toutes les 3 s tant que le lien est actif.
+     · Safari / Firefox : repli téléchargement (.md) + sélecteur de fichier.
+   Le lien vers le fichier est mémorisé dans IndexedDB : il est retrouvé au
+   rechargement de la page (le navigateur redemande l'autorisation d'écriture). */
+const FS_OK = (typeof window.showSaveFilePicker === 'function');
+const MD_TYPES = [{ description:'Cours Markdown', accept:{ 'text/markdown':['.md','.markdown'] } }];
+let fileHandle=null, fileLabel=null, fileGranted=false;
+let diskTimer=null, diskBusy=false, lastDiskAt=null, nudgeTimer=null, nudged=false;
+
+// — Mémorisation du lien vers le fichier (IndexedDB : seul stockage qui accepte un FileSystemHandle) —
+const IDB_DB='cnsmdp-atelier', IDB_STORE='handles';
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open(IDB_DB,1);
+  r.onupgradeneeded=()=>{ r.result.createObjectStore(IDB_STORE); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbSet(k,v){ try{ const db=await idbOpen(); await new Promise((res,rej)=>{
+  const t=db.transaction(IDB_STORE,'readwrite'); t.objectStore(IDB_STORE).put(v,k);
+  t.oncomplete=res; t.onerror=()=>rej(t.error); }); }catch(_){} }
+async function idbGet(k){ try{ const db=await idbOpen(); return await new Promise(res=>{
+  const q=db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(k);
+  q.onsuccess=()=>res(q.result||null); q.onerror=()=>res(null); }); }catch(_){ return null; } }
+
+// Autorisation d'écriture sur le fichier. `ask` n'est possible que pendant un geste
+// utilisateur (clic, ⌘S) — jamais depuis l'enregistrement automatique.
+async function ensureAccess(ask){
+  if(!fileHandle) return false;
+  if(!fileHandle.queryPermission){ fileGranted=true; return true; }
+  const opt={mode:'readwrite'};
+  try{
+    if(await fileHandle.queryPermission(opt)==='granted'){ fileGranted=true; return true; }
+    if(ask && await fileHandle.requestPermission(opt)==='granted'){ fileGranted=true; return true; }
+  }catch(_){}
+  fileGranted=false; return false;
+}
+async function linkHandle(h){
+  fileHandle=h; fileLabel=h.name||'cours.md'; fileGranted=true;
+  await idbSet('current',h); setFileChip();
+}
+async function unlinkHandle(){
+  fileHandle=null; fileLabel=null; fileGranted=false; lastDiskAt=null;
+  clearTimeout(diskTimer); diskTimer=null;
+  await idbSet('current',null); setFileChip();
+}
+// Écrit le cours dans le fichier lié. Silencieux : renvoie false sans rien casser
+// si l'autorisation a expiré (l'expert la redonnera au prochain ⌘S).
+async function writeToFile(){
+  if(!fileHandle || diskBusy) return false;
+  diskBusy=true;
+  try{
+    if(!await ensureAccess(false)){ setFileChip(); return false; }
+    const w=await fileHandle.createWritable();
+    await w.write(md()); await w.close();
+    diskDirty=false; lastDiskAt=new Date(); setFileChip();
+    return true;
+  }catch(e){ console.error('Écriture disque impossible :',e); fileGranted=false; setFileChip(); return false; }
+  finally{ diskBusy=false; }
+}
+function scheduleDiskSave(){
+  if(!fileHandle) return;
+  clearTimeout(diskTimer);
+  diskTimer=setTimeout(()=>{ diskTimer=null; writeToFile(); }, 3000);
+}
+// ⌘S / Ctrl+S / clic sur la pastille / « Enregistrer ».
+async function saveNow(){
+  if(!fileHandle) return saveAs();
+  if(!await ensureAccess(true)){
+    toast(LANG==='en'?'File access denied — use “Save as…”':'Accès au fichier refusé — utilisez « Enregistrer sous… »');
+    return;
+  }
+  clearTimeout(diskTimer); diskTimer=null;
+  const ok=await writeToFile();
+  toast(ok ? (LANG==='en'?'Saved to ':'Enregistré dans ')+fileLabel
+           : (LANG==='en'?'Save failed':'Échec de l’enregistrement'));
+}
+async function saveAs(){
+  const name=slug(state.meta.title)+'.md';
+  if(!FS_OK){ downloadMd(name); return; }         // Safari / Firefox
+  let h;
+  try{ h=await window.showSaveFilePicker({ suggestedName:name, types:MD_TYPES }); }
+  catch(e){ if(e && e.name==='AbortError') return; console.error(e); downloadMd(name); return; }
+  await linkHandle(h);
+  clearTimeout(diskTimer); diskTimer=null;
+  const ok=await writeToFile();
+  toast(ok ? (LANG==='en'?'Saved to ':'Enregistré dans ')+fileLabel
+           : (LANG==='en'?'Save failed':'Échec de l’enregistrement'));
+}
+async function openFile(){
+  if(!FS_OK) return loadProject();                // Safari / Firefox : <input type="file">
+  let h;
+  try{ [h]=await window.showOpenFilePicker({ types:MD_TYPES.concat([{description:'Brouillon',accept:{'application/json':['.json']}}]) }); }
+  catch(e){ return; }                             // sélection annulée
+  let text;
+  try{ text=await (await h.getFile()).text(); }
+  catch(e){ console.error(e); toast('Fichier illisible'); return; }
+  if(!applyLoadedText(text, h.name)) return;      // fichier illisible ou remplacement refusé : on ne lie rien
+  await linkHandle(h);
+  clearTimeout(diskTimer); diskTimer=null;        // le contenu vient d'être lu : rien à réécrire
+  diskDirty=false; lastDiskAt=new Date(); setFileChip();
+}
+// Charge un contenu texte dans l'éditeur, avec les trois garde-fous historiques.
+// Renvoie false si rien n'a été chargé (le travail en cours est alors intact).
+function applyLoadedText(text,name){
+  const isJson=/\.json$/i.test(name||'');
+  let next;
+  // 1) On parse D'ABORD dans une variable temporaire : un fichier illisible
+  //    ne doit jamais écraser le travail en cours.
+  try{ next = isJson ? JSON.parse(text) : mdToState(text); }
+  catch(err){ console.error(err); toast('Fichier illisible'); return false; }
+  // 2) Garde-fou : si un cours est déjà ouvert, on confirme avant de l'écraser.
+  if(courseHasContent()){
+    const msg = (LANG==='en')
+      ? 'Loading this file will replace the course currently open. Save it first if you want to keep it. Continue?'
+      : 'Charger ce fichier va remplacer le cours en cours. Pensez à l’enregistrer d’abord si vous voulez le garder. Continuer ?';
+    if(!confirm(msg)){ toast(LANG==='en'?'Loading cancelled':'Chargement annulé'); return false; }
+  }
+  // 3) Filet de sécurité : on garde une copie du brouillon écrasé (clé -prev).
+  try{ const cur=localStorage.getItem(LS_KEY); if(cur) localStorage.setItem(LS_KEY+'-prev', cur); }catch(_){}
+  state=next; migrateState(); selected={type:'intro'}; render(); markDirty();
+  toast(isJson?'Brouillon chargé':'Cours chargé (.md)');
+  return true;
+}
+// Pastille d'état : dit en permanence où vit la copie de référence du travail.
+function setFileChip(){
+  const el=document.getElementById('fileChip'); if(!el) return;
+  const en=(LANG==='en');
+  if(fileHandle){
+    el.hidden=false;
+    if(!fileGranted){
+      el.className='file-chip warn';
+      el.textContent='📄 '+fileLabel+' · '+(en?'click to re-authorise':'cliquez pour réautoriser');
+      el.title=en?'The browser needs your permission again to write to this file.'
+                 :'Le navigateur a besoin de votre autorisation pour réécrire ce fichier.';
+    } else if(diskDirty){
+      el.className='file-chip warn';
+      el.textContent='📄 '+fileLabel+' · '+(en?'modified':'modifié');
+      el.title=en?'Unsaved changes — saving automatically…':'Modifications non enregistrées — enregistrement automatique en cours…';
+    } else {
+      const t=lastDiskAt?lastDiskAt.toLocaleTimeString(en?'en-GB':'fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+      el.className='file-chip';
+      el.textContent='📄 '+fileLabel+(t?' · '+(en?'saved ':'enregistré ')+t:'');
+      el.title=en?'Saved on your disk. ⌘S / Ctrl+S to save now.':'Enregistré sur votre disque. ⌘S / Ctrl+S pour enregistrer maintenant.';
+    }
+  } else if(courseHasContent()){
+    el.hidden=false; el.className='file-chip warn';
+    el.textContent='⚠ '+(en?'No file — browser only':'Aucun fichier — navigateur seul');
+    el.title=en?'This course only exists in this browser. Click to save it to a file.'
+               :'Ce cours n’existe que dans ce navigateur. Cliquez pour l’enregistrer dans un fichier.';
+  } else { el.hidden=true; }
+}
+// Rappel unique après 2 min de travail non relié à un fichier.
+function maybeNudge(){
+  if(nudged || fileHandle || nudgeTimer) return;
+  nudgeTimer=setTimeout(()=>{
+    nudgeTimer=null;
+    if(nudged || fileHandle || !courseHasContent()) return;
+    nudged=true;
+    toast(LANG==='en'?'Your work only exists in this browser — save it to a file (⌘S).'
+                     :'Votre travail n’existe que dans ce navigateur — enregistrez-le dans un fichier (⌘S).');
+  }, 120000);
+}
+// Au démarrage : on retrouve le fichier lié à la session précédente. On ne relit
+// PAS son contenu (le brouillon local est la version la plus récente) — on rétablit
+// seulement le lien pour que ⌘S réécrive le bon fichier.
+async function restoreFileLink(){
+  if(!FS_OK) return;
+  const h=await idbGet('current');
+  if(!h){ setFileChip(); return; }
+  fileHandle=h; fileLabel=h.name||'cours.md';
+  await ensureAccess(false);          // autorisation souvent à redemander après rechargement
+  setFileChip();
+}
+function downloadMd(name){
   const blob=new Blob([md()],{type:'text/markdown'});
-  triggerDownload(blob, slug(state.meta.title)+'.md');
-  exportedClean=true;
+  triggerDownload(blob, name || (slug(state.meta.title)+'.md'));
+  diskDirty=false; lastDiskAt=new Date(); setFileChip();
   toast('Cours enregistré au format Markdown (.md)');
 }
+function saveProject(){ downloadMd(); }   // repli historique (téléchargement)
 function loadProject(){
   const inp=document.getElementById('fileInput');
   inp.onchange=e=>{
     const f=e.target.files[0]; if(!f) return;
-    const name=(f.name||'').toLowerCase();
     const r=new FileReader();
-    r.onload=()=>{ try{
-        // 1) On parse D'ABORD dans une variable temporaire : un fichier illisible
-        //    ne doit jamais écraser le travail en cours.
-        const next = name.endsWith('.json') ? JSON.parse(r.result) : mdToState(r.result);
-        // 2) Garde-fou : si un cours est déjà ouvert, on confirme avant de l'écraser.
-        if(courseHasContent()){
-          const msg = (LANG==='en')
-            ? 'Loading this file will replace the course currently open. Download it first if you want to keep it. Continue?'
-            : 'Charger ce fichier va remplacer le cours en cours. Pensez à le télécharger d’abord si vous voulez le garder. Continuer ?';
-          if(!confirm(msg)){ toast(LANG==='en'?'Loading cancelled':'Chargement annulé'); return; }
-        }
-        // 3) Filet de sécurité : on garde une copie du brouillon écrasé (clé -prev).
-        try{ const cur=localStorage.getItem(LS_KEY); if(cur) localStorage.setItem(LS_KEY+'-prev', cur); }catch(_){}
-        state = next;
-        migrateState(); selected={type:'intro'}; render(); markDirty();
-        toast(name.endsWith('.json')?'Brouillon chargé':'Cours chargé (.md)');
-      } catch(err){ console.error(err); toast('Fichier illisible'); } };
+    r.onload=()=>{ applyLoadedText(r.result, f.name||''); };
     r.readAsText(f); inp.value='';
   };
   inp.click();
@@ -922,12 +1098,19 @@ function slug(s){ return (s||'cours').toLowerCase().normalize('NFD').replace(/[�
 
 // Anti-perte de travail à la fermeture :
 //  - pagehide : flush immédiat du brouillon (aucune frappe perdue dans le debounce) ;
-//  - beforeunload : avertit si le cours a du contenu jamais téléchargé en .md
-//    (le localStorage est la seule copie ; un nettoyage de cache l'effacerait).
+//  - beforeunload : avertit si le travail n'est pas garanti présent dans un fichier
+//    disque (le localStorage seul ne survit ni à un nettoyage de cache, ni à un
+//    changement de navigateur ou de poste).
 window.addEventListener('pagehide', flushSave);
 window.addEventListener('beforeunload', (e)=>{
   flushSave();
-  if(!exportedClean && courseHasContent()){ e.preventDefault(); e.returnValue=''; return ''; }
+  if(diskDirty && courseHasContent()){ e.preventDefault(); e.returnValue=''; return ''; }
+});
+// ⌘S / Ctrl+S — enregistrer dans le fichier.
+window.addEventListener('keydown', (e)=>{
+  if((e.metaKey||e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key==='s'||e.key==='S')){
+    e.preventDefault(); saveNow();
+  }
 });
 
 /* ============================================================
@@ -976,6 +1159,9 @@ const TR = {
   "Atelier de rédaction":"Writing Studio",
   "Menu ▾":"Menu ▾",
   "Importer un document…":"Import a document…",
+  "Ouvrir un fichier…":"Open a file…",
+  "Enregistrer":"Save",
+  "Enregistrer sous…":"Save as…",
   "Charger un projet…":"Load a project…",
   "Télécharger le document":"Download the document",
   "Aperçu":"Preview",
@@ -1169,7 +1355,7 @@ function updateLangBtn(){ const f=document.getElementById('langFr'),e=document.g
 function applyLang(l){ LANG=(l==='en')?'en':'fr'; try{ localStorage.setItem('cnsmdp-atelier-lang',LANG); }catch(e){}
   document.documentElement.lang=LANG; updateLangBtn();
   if(LANG==='fr') restoreTree(document);
-  render(); syncBarGauge();
+  render(); syncBarGauge(); setFileChip();
   setSaveState(LANG==='en'?'Saved ✓':'Enregistré ✓');
 }
 
@@ -2554,9 +2740,13 @@ function initFmtBar(){
     `<div class="hmenu" id="fileMenu">`+
       `<button class="barmenu-btn" aria-haspopup="true" aria-expanded="false" onclick="event.stopPropagation();toggleFileMenu()">Menu ▾</button>`+
       `<div class="hmenu-panel" role="menu">`+
+        `<button role="menuitem" onclick="closeFileMenu();openFile()"><span class="hm-ic">📂</span>Ouvrir un fichier…</button>`+
+        // Le raccourci est placé AVANT le libellé dans le DOM (remis à droite par `order`) :
+        // le traducteur EN ne traduit que le dernier nœud texte du bouton.
+        `<button role="menuitem" onclick="closeFileMenu();saveNow()"><span class="hm-ic">💾</span><span class="hm-key">${/Mac|iP/.test(navigator.platform)?'⌘S':'Ctrl+S'}</span>Enregistrer</button>`+
+        `<button role="menuitem" onclick="closeFileMenu();saveAs()"><span class="hm-ic">⧉</span>Enregistrer sous…</button>`+
+        `<div class="hm-sep"></div>`+
         `<button role="menuitem" onclick="closeFileMenu();openImport()"><span class="hm-ic">⤓</span>Importer un document…</button>`+
-        `<button role="menuitem" onclick="closeFileMenu();loadProject()"><span class="hm-ic">📂</span>Charger un projet…</button>`+
-        `<button role="menuitem" onclick="closeFileMenu();saveProject()"><span class="hm-ic">💾</span>Télécharger le document</button>`+
         `<div class="hm-sep"></div>`+
         `<button role="menuitem" onclick="closeFileMenu();openPreview()"><span class="hm-ic">◉</span>Aperçu</button>`+
         `<button role="menuitem" onclick="closeFileMenu();openExport()"><span class="hm-ic">↗</span>Exporter pour le CNSMDP</button>`+
@@ -2747,6 +2937,9 @@ function finishDictation(){
    INIT
    ============================================================ */
 initFmtBar(); restore(); render(); updateLangBtn(); document.documentElement.lang=LANG; setSaveState('Prêt');
+// Un brouillon restauré depuis le navigateur n'est pas une preuve d'enregistrement disque.
+diskDirty = courseHasContent();
+setFileChip(); restoreFileLink(); maybeNudge();
 </script>
 </body>
 </html>
