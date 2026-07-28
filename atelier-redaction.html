@@ -1579,7 +1579,7 @@ function refreshBadge(L){
 function findPart(id){ return state.parts.find(p=>p.id===id); }
 function findLesson(pid,lid){ const p=findPart(pid); return p? p.lessons.find(l=>l.id===lid):null; }
 
-function render(){ renderSidebar(); renderWork(); if(LANG==='en') translateTree(document); hydrateAssetPreviews(document); }
+function render(){ renderSidebar(); renderWork(); if(LANG==='en') translateTree(document); }
 // Un fichier lâché à côté d'une zone de dépôt ne doit pas faire quitter la page.
 ['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>{
   if(!e.target.closest || !e.target.closest('[data-drop]')) e.preventDefault();
@@ -1598,6 +1598,7 @@ function renderWork(){
   bindWork();
   syncBarGauge();
   const blk=document.getElementById('blocks'); if(blk) typesetMath(blk); // rendu des formules dans les blocs en mode vue
+  hydrateAssetPreviews(w);   // médias du dossier de cours : ici, sinon aucun des ~18 appelants ne les affiche
 }
 
 /* ---------- Vue : Introduction du cours ---------- */
@@ -2141,7 +2142,10 @@ function mediaEmbed(type,d){
 }
 // Carte média : le lecteur en haut, les métadonnées dans un <details> repliable.
 function mediaCard(b,def){
-  const open=(b.data&&b.data.src)?'':' open';   // si pas de source : déplié pour inviter à la saisir
+  // Déplié tant qu'il n'y a pas de source (pour inviter à la saisir) ET tant que
+  // l'expert édite la carte — sans quoi le volet se referme à l'instant même où
+  // son dépôt de fichier réussit, et il a l'impression qu'il ne s'est rien passé.
+  const open=(b.data&&b.data.src&&editBlk!==b.id)?'':' open';
   return `<div class="media-embed-wrap">${mediaEmbed(b.type,b.data||{})}</div>`
     +`<details class="meta-fold"${open}><summary>${LL('Le média','The media')} <span class="meta-hint">${LL('fichier, légende, crédits','file, caption, credits')}</span></summary>`
     +`<div class="meta-body">${def.edit?def.edit(b.data,b.id):editGeneric(def,b.data)}</div></details>`;
