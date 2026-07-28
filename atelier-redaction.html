@@ -74,6 +74,14 @@
   .hmenu-panel .hm-key{order:3;margin-left:auto;padding-left:16px;font-family:var(--font-mono);
     font-size:var(--text-xs);color:#9ca3af}
   .hmenu-panel .hm-sep{height:1px;background:#e5e5e3;margin:4px 2px}
+  /* Champ média : zone de dépôt + sélecteur + lien */
+  .dropzone{display:flex;gap:8px;align-items:center;padding:6px;border:1px dashed var(--border-strong);
+    border-radius:var(--radius-sm);background:var(--surface-alt);transition:all .12s}
+  .dropzone .dz-input{flex:1;border-color:transparent;background:var(--surface)}
+  .dropzone.over{border-color:var(--ink);border-style:solid;background:var(--surface-hover)}
+  .dz-hint{font-size:var(--text-xs);color:var(--ink-soft,#6b7280);margin-top:5px}
+  .dz-prev:not(:empty){margin-top:8px}
+  .dz-prev img,.dz-prev video{max-height:220px;display:block}
   /* Bascule de langue FR | EN */
   .lang-switch{display:inline-flex;border:1px solid #374151;border-radius:7px;overflow:hidden}
   .lang-switch button{background:transparent;color:#9ca3af;border:0;padding:5px 9px;font-family:var(--font-ui);
@@ -212,6 +220,33 @@
   .ico-btn:hover:not(:disabled){border-color:var(--ink);color:var(--ink)}
   .ico-btn:disabled{opacity:.3;cursor:default}
   .qcard{border:1px solid var(--border-muted);border-radius:var(--radius-sm);padding:12px 14px;margin:10px 0;background:var(--surface-sunk)}
+
+  /* Conversion de bloc (menu « Transformer en… ») */
+  .conv-wrap{position:relative;display:flex}
+  .conv-menu{position:absolute;right:0;top:30px;z-index:30;background:var(--surface);border:1px solid var(--border-strong);
+    border-radius:var(--radius);box-shadow:0 12px 28px rgba(0,0,0,.14);padding:6px;min-width:236px;max-height:340px;overflow:auto}
+  .conv-h{font-family:var(--font-mono);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:.06em;
+    color:var(--ink-faint);padding:7px 8px 3px}
+  .conv-btn{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:0;background:none;text-align:left;
+    border-radius:var(--radius-sm);cursor:pointer;font:inherit;font-size:var(--text-sm);color:var(--ink)}
+  .conv-btn:hover{background:var(--surface-hover)}
+  .conv-btn .blk-ic{margin:0}
+  /* Sélection multiple + barre de fusion */
+  .blk-sel{opacity:0;margin-right:7px;transition:opacity .12s}
+  .card.blk:hover .blk-sel,.card.blk.is-sel .blk-sel{opacity:1}
+  .card.blk.is-sel{box-shadow:0 0 0 2px var(--ink-muted) inset}
+  .selbar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(10px);z-index:60;display:none;
+    align-items:center;gap:10px;background:var(--ink);color:#fff;border-radius:999px;padding:8px 10px 8px 18px;
+    box-shadow:0 14px 34px rgba(0,0,0,.28);opacity:0;transition:opacity .14s,transform .14s}
+  .selbar.show{display:flex;opacity:1;transform:translateX(-50%)}
+  .selbar .sb-n{font-size:var(--text-sm);white-space:nowrap}
+  .selbar .sb-btn{border:1px solid rgba(255,255,255,.34);background:transparent;color:#fff;border-radius:999px;
+    padding:5px 13px;font:inherit;font-size:var(--text-sm);cursor:pointer;white-space:nowrap}
+  .selbar .sb-btn:hover{background:rgba(255,255,255,.14)}
+  .selbar select.sb-btn{appearance:none;-webkit-appearance:none;padding-right:26px;
+    background-image:linear-gradient(45deg,transparent 50%,#fff 50%),linear-gradient(135deg,#fff 50%,transparent 50%);
+    background-position:calc(100% - 14px) 12px,calc(100% - 9px) 12px;background-size:5px 5px;background-repeat:no-repeat}
+  .selbar select.sb-btn option{color:var(--ink);background:#fff}
 
   /* Palette d'insertion — menu déroulant ancré au bouton */
   .palette-wrap{position:relative;margin:16px 0}
@@ -1073,6 +1108,129 @@ async function restoreFileLink(){
   await ensureAccess(false);          // autorisation souvent à redemander après rechargement
   setFileChip();
 }
+/* ============================================================
+   DOSSIER DE COURS ET ASSETS
+   ============================================================
+   L'expert désigne une fois un dossier de cours ; les médias qu'il dépose y sont
+   copiés dans `assets/` et le cours ne porte qu'un lien relatif (assets/photo.jpg).
+   Il repart avec un dossier autonome — .md + médias — qu'il peut transmettre tel quel.
+   Le dossier peut vivre sur le disque ou dans un dossier SharePoint/OneDrive
+   SYNCHRONISÉ sur le poste (le navigateur n'y voit qu'un dossier local). Un simple
+   lien SharePoint web, lui, est hors de portée : dans ce cas on colle l'URL du média.
+   Sans dossier désigné (ou sur Safari/Firefox), on ne retient que le nom du fichier
+   et l'expert transmet ses médias à part. */
+let dirHandle=null, dirLabel=null;
+const ASSETS_DIR='assets';
+const assetUrlCache=new Map();   // lien relatif → blob: URL (aperçu)
+
+async function dirAccess(ask){
+  if(!dirHandle) return false;
+  if(!dirHandle.queryPermission) return true;
+  const opt={mode:'readwrite'};
+  try{
+    if(await dirHandle.queryPermission(opt)==='granted') return true;
+    if(ask && await dirHandle.requestPermission(opt)==='granted') return true;
+  }catch(_){}
+  return false;
+}
+// Doit être appelé depuis un geste utilisateur (clic, dépôt de fichier).
+async function pickCourseFolder(){
+  if(!FS_OK){ toast(LANG==='en'?'Your browser cannot open a folder — paste the media URL instead'
+                              :'Votre navigateur ne sait pas ouvrir un dossier — collez plutôt le lien du média'); return false; }
+  try{
+    const h=await window.showDirectoryPicker({mode:'readwrite'});
+    dirHandle=h; dirLabel=h.name; assetUrlCache.clear();
+    await idbSet('dir',h);
+    toast((LANG==='en'?'Course folder: ':'Dossier du cours : ')+dirLabel);
+    return true;
+  }catch(e){ return false; }   // annulé
+}
+// Entrée de menu : désigner (ou changer) le dossier, puis rafraîchir les aperçus.
+async function chooseCourseFolder(){
+  if(await pickCourseFolder()) renderWork();
+}
+async function restoreDirLink(){
+  if(!FS_OK) return;
+  const h=await idbGet('dir'); if(!h) return;
+  dirHandle=h; dirLabel=h.name||'dossier';
+  await dirAccess(false);
+}
+// Copie le fichier dans <dossier>/assets/ sans jamais écraser un média existant,
+// et renvoie le lien relatif à écrire dans le cours.
+// Un nom de fichier sûr dans un lien Markdown : ni espace (qui coupe `![](…)`),
+// ni accent (qui voyage mal d'un système de fichiers à l'autre).
+function safeAssetName(raw){
+  const s=String(raw||'media');
+  const dot=s.lastIndexOf('.');
+  const base=(dot>0?s.slice(0,dot):s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^\w.-]+/g,'-').replace(/^-|-$/g,'')||'media';
+  const ext=(dot>0?s.slice(dot):'').toLowerCase().replace(/[^\w.]/g,'');
+  return {base,ext};
+}
+async function copyAssetToFolder(file){
+  const sub=await dirHandle.getDirectoryHandle(ASSETS_DIR,{create:true});
+  const {base,ext}=safeAssetName(file.name);
+  let name=base+ext;
+  for(let i=1;i<200;i++){
+    try{ await sub.getFileHandle(name); name=base+'-'+i+ext; }   // pris : on décale
+    catch(e){ break; }                                           // libre
+  }
+  const fh=await sub.getFileHandle(name,{create:true});
+  const w=await fh.createWritable(); await w.write(file); await w.close();
+  return ASSETS_DIR+'/'+name;
+}
+// Point d'entrée du glisser-déposer et du bouton « Parcourir ».
+async function attachAsset(file){
+  if(!file) return null;
+  if(FS_OK){
+    if(!dirHandle && !await pickCourseFolder()) return fallbackAsset(file);
+    if(!await dirAccess(true)) return fallbackAsset(file);
+    try{
+      const rel=await copyAssetToFolder(file);
+      toast((LANG==='en'?'Copied to ':'Copié dans ')+dirLabel+'/'+rel);
+      return rel;
+    }catch(e){ console.error('Copie impossible :',e); return fallbackAsset(file); }
+  }
+  return fallbackAsset(file);
+}
+// Repli : on note le chemin attendu, sans copier — l'expert transmet le média à part.
+function fallbackAsset(file){
+  toast(LANG==='en'?'Filename noted — send the media file separately'
+                   :'Nom du fichier noté — transmettez le média séparément');
+  const {base,ext}=safeAssetName(file.name);
+  return ASSETS_DIR+'/'+base+ext;
+}
+// Aperçu d'un lien relatif : relit le média dans le dossier de cours.
+async function assetPreviewUrl(rel){
+  if(!rel || /^(https?:|data:|blob:)/i.test(rel)) return rel||'';
+  if(assetUrlCache.has(rel)) return assetUrlCache.get(rel);
+  if(!dirHandle || !await dirAccess(false)) return '';
+  try{
+    const parts=rel.split('/').filter(Boolean);
+    let dir=dirHandle;
+    for(let i=0;i<parts.length-1;i++) dir=await dir.getDirectoryHandle(parts[i]);
+    const f=await (await dir.getFileHandle(parts[parts.length-1])).getFile();
+    const url=URL.createObjectURL(f); assetUrlCache.set(rel,url); return url;
+  }catch(e){ return ''; }
+}
+// Remplit après coup les aperçus dont le média vit dans le dossier de cours.
+function hydrateAssetPreviews(root){
+  (root||document).querySelectorAll('[data-asset-prev]').forEach(async el=>{
+    const rel=el.getAttribute('data-asset-prev'); if(!rel) return;
+    const url=await assetPreviewUrl(rel);
+    if(!url){
+      // Le cours pointe vers un média du dossier, mais on ne peut pas le lire :
+      // dossier pas encore désigné, autorisation expirée, ou fichier déplacé.
+      el.innerHTML=`<div class="media-empty">${esc(rel)} — `
+        +(LANG==='en'?'designate the media folder to see it (Menu ▸ Media folder…)'
+                     :'désignez le dossier des médias pour le voir (Menu ▸ Dossier des médias…)')+'</div>';
+      return;
+    }
+    el.innerHTML= /\.(mp3|wav|ogg|m4a)$/i.test(rel) ? `<audio controls src="${esc(url)}" style="width:100%"></audio>`
+      : /\.(mp4|webm|mov)$/i.test(rel) ? `<video controls src="${esc(url)}" style="max-width:100%;border-radius:var(--radius)"></video>`
+      : `<img src="${esc(url)}" alt="" style="max-width:100%;border-radius:var(--radius)">`;
+  });
+}
 function downloadMd(name){
   const blob=new Blob([md()],{type:'text/markdown'});
   triggerDownload(blob, name || (slug(state.meta.title)+'.md'));
@@ -1421,7 +1579,11 @@ function refreshBadge(L){
 function findPart(id){ return state.parts.find(p=>p.id===id); }
 function findLesson(pid,lid){ const p=findPart(pid); return p? p.lessons.find(l=>l.id===lid):null; }
 
-function render(){ renderSidebar(); renderWork(); if(LANG==='en') translateTree(document); }
+function render(){ renderSidebar(); renderWork(); if(LANG==='en') translateTree(document); hydrateAssetPreviews(document); }
+// Un fichier lâché à côté d'une zone de dépôt ne doit pas faire quitter la page.
+['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>{
+  if(!e.target.closest || !e.target.closest('[data-drop]')) e.preventDefault();
+}));
 function select(t){ selected=t; render();
   if(window.innerWidth<=860) document.querySelector('aside.nav').classList.remove('open');
   document.querySelector('main.work').scrollTop=0;
@@ -1600,6 +1762,20 @@ function fieldHTML(f,d){
   }
   if(f.t==='text'){
     return `<div class="field"><label class="lab">${f.label}</label>${hint}<input class="txt" data-bf="${f.k}" value="${esc(v)}" placeholder="${esc(f.ph||'')}"></div>`;
+  }
+  // Champ média : dépôt de fichier, sélecteur, ou lien collé — les trois mènent au même
+  // champ texte, seule source de vérité (c'est lui qui part dans le Markdown).
+  if(f.t==='asset'){
+    const rel=String(v||'');
+    const local=rel && !/^(https?:|data:)/i.test(rel);
+    return `<div class="field"><label class="lab">${f.label}</label>${hint}
+      <div class="dropzone" data-drop="${f.k}">
+        <input class="txt dz-input" data-bf="${f.k}" value="${esc(v)}" placeholder="${esc(f.ph||'Collez un lien, ou déposez un fichier ici')}">
+        <button type="button" class="btn btn--sm" data-browse="${f.k}">Parcourir…</button>
+      </div>
+      <div class="dz-hint">${f.dzHint||'Déposez un fichier ici, ou collez un lien.'}</div>
+      <div class="dz-prev"${local?` data-asset-prev="${esc(rel)}"`:''}></div>
+    </div>`;
   }
   const cls=f.t==='bigarea'?'txt big':'txt';
   return `<div class="field"><label class="lab">${f.label}</label>${hint}<textarea class="${cls}" data-bf="${f.k}" placeholder="${esc(f.ph||'')}">${esc(v)}</textarea></div>`;
@@ -1805,27 +1981,49 @@ const BLOCKDEFS={
     fields:[{k:'title',t:'text',label:'Titre',ph:'Objectifs'},{k:'text',t:'area',label:'Objectifs (un par ligne)'}],
     serialize:d=>fence('objectifs',A([['title',d.title||'Objectifs']]),bullets(d.text)),
     preview:d=>`<div class="pv-obj"><div class="pv-obj-t">${esc(d.title||'Objectifs')}</div>${listHTML(d.text)}</div>` },
+  // ── Blocs médias ────────────────────────────────────────────────────────────
+  // Modales volontairement minimales : le média, ce qu'on en dit, et d'où il vient.
+  // Le lien accepte indifféremment un fichier déposé (copié dans assets/), un
+  // fichier choisi, ou une URL collée.
   video_expert:{ label:'Vidéo expert·e',
-    fields:[{k:'title',t:'text',label:'Titre'},{k:'expert',t:'text',label:'Intervenant·e'},{k:'role',t:'text',label:'Fonction'},{k:'src',t:'text',label:'Lien vidéo (ou « à produire »)'},{k:'transcript',t:'area',label:'Transcription / script'}],
-    serialize:d=>{ const tr=(d.transcript||'').trim(); return `:::video_expert`+A([['title',d.title],['src',d.src],['expert',d.expert],['role',d.role]])+'\n'+(tr?`\n### Transcript\n${tr}\n`:'')+':::'; },
-    preview:d=>pvMedia('Vidéo expert·e','☻',d.title||(d.expert||'Capsule vidéo'),[d.role&&esc(d.role),...srcMeta(d)],d.transcript) },
+    fields:[{k:'src',t:'asset',label:'Vidéo',ph:'Lien YouTube/Vimeo, ou déposez le fichier',dzHint:'Déposez le fichier vidéo, ou collez un lien YouTube / Vimeo.'},
+      {k:'title',t:'text',label:'Titre'},
+      {k:'expert',t:'text',label:'Intervenant·e'},
+      {k:'role',t:'text',label:'Fonction'},
+      {k:'credits',t:'text',label:'Crédits',ph:'ex. © CNSMDP, 2026 — captation Studio X'}],
+    serialize:d=>`:::video_expert`+A([['title',d.title],['src',d.src],['expert',d.expert],['role',d.role],['credits',d.credits]])+'\n:::',
+    preview:d=>pvMedia('Vidéo expert·e','☻',d.title||(d.expert||'Capsule vidéo'),[d.role&&esc(d.role),...srcMeta(d)],d.credits) },
   video:{ label:'Vidéo',
-    fields:[{k:'title',t:'text',label:'Titre'},{k:'src',t:'text',label:'Lien (YouTube, Vimeo…)'},{k:'startTime',t:'text',label:'Début (mm:ss)'},{k:'endTime',t:'text',label:'Fin (mm:ss)'},{k:'body',t:'area',label:'Description / intention'}],
-    serialize:d=>fence('video',A([['src',d.src],['title',d.title],['startTime',d.startTime],['endTime',d.endTime]]),(d.body||'').trim()),
-    preview:d=>pvMedia('Vidéo','▶',d.title,srcMeta(d),d.body) },
+    fields:[{k:'src',t:'asset',label:'Vidéo',ph:'Lien YouTube/Vimeo, ou déposez le fichier',dzHint:'Déposez le fichier vidéo, ou collez un lien YouTube / Vimeo.'},
+      {k:'title',t:'text',label:'Titre'},
+      {k:'credits',t:'text',label:'Crédits',ph:'ex. © Arte, 2019'}],
+    serialize:d=>fence('video',A([['src',d.src],['title',d.title],['credits',d.credits]]),''),
+    preview:d=>pvMedia('Vidéo','▶',d.title,srcMeta(d),d.credits) },
   audio:{ label:'Audio',
-    fields:[{k:'title',t:'text',label:'Titre'},{k:'src',t:'text',label:'Source / lien'},{k:'startTime',t:'text',label:'Début (mm:ss)'},{k:'endTime',t:'text',label:'Fin (mm:ss)'},{k:'transcript',t:'area',label:'Transcription'},{k:'body',t:'area',label:'Intention pédagogique'}],
-    serialize:d=>{ const tr=(d.transcript||'').trim(),bo=(d.body||'').trim();
-      return `:::audio`+A([['src',d.src],['title',d.title],['startTime',d.startTime],['endTime',d.endTime]])+'\n'+(bo?bo+'\n':'')+(tr?`\n### Transcript\n${tr}\n`:'')+':::'; },
-    preview:d=>pvMedia('Audio','♪',d.title,srcMeta(d),d.body||d.transcript) },
+    fields:[{k:'src',t:'asset',label:'Audio',ph:'Lien du fichier, ou déposez-le',dzHint:'Déposez le fichier audio (mp3, wav…), ou collez son lien.'},
+      {k:'title',t:'text',label:'Titre'},
+      {k:'credits',t:'text',label:'Crédits',ph:'ex. Interprète, label, année'}],
+    serialize:d=>`:::audio`+A([['src',d.src],['title',d.title],['credits',d.credits]])+'\n:::',
+    preview:d=>pvMedia('Audio','♪',d.title,srcMeta(d),d.credits) },
   image:{ label:'Image',
-    fields:[{k:'src',t:'text',label:'Lien image (vide si à fournir)'},{k:'alt',t:'text',label:'Texte alternatif'},{k:'caption',t:'text',label:'Légende'},{k:'body',t:'area',label:'Description (si à produire)'}],
-    serialize:d=>{ if(d.src){ return d.caption?`![${attr(d.alt||'')}](${d.src} "${attr(d.caption)}")`:`![${attr(d.alt||'')}](${d.src})`; }
-      return fence('image',A([['alt',d.alt],['caption',d.caption]]),(d.body||'').trim()); },
-    preview:d=>{ if(d.src&&/^https?:\/\//i.test(d.src.trim())) return `<figure style="margin:14px 0"><img src="${esc(d.src)}" alt="${esc(d.alt||'')}" style="max-width:100%;border-radius:var(--radius)">${d.caption?`<figcaption class="pv-media-m" style="margin-top:4px">${esc(d.caption)}</figcaption>`:''}</figure>`;
-      return pvMedia('Image','▣',d.caption||d.alt||'Image à fournir',[],d.body); } },
+    fields:[{k:'src',t:'asset',label:'Image',ph:'Lien de l’image, ou déposez le fichier',dzHint:'Déposez le fichier image (jpg, png…), ou collez son lien.'},
+      {k:'caption',t:'text',label:'Légende',hint:'Sert aussi de description pour les lecteurs d’écran — décrivez ce que montre l’image.'},
+      {k:'credits',t:'text',label:'Crédits',ph:'ex. Photo : Jean Dupont / CNSMDP'}],
+    // Forme native du bridge : ![légende](src "crédits") — la légende devient le
+    // texte alternatif (aucune image publiée sans alternative textuelle) et les
+    // crédits la caption affichée, exactement comme l'exemple du bridge.
+    // Sans lien encore renseigné, on garde la fence pour ne rien perdre.
+    serialize:d=>{ const cap=(d.caption||'').trim(), cr=(d.credits||'').trim();
+      if(d.src) return cr?`![${attr(cap)}](${d.src} "${attr(cr)}")`:`![${attr(cap)}](${d.src})`;
+      return fence('image',A([['caption',cap],['credits',cr]]),''); },
+    preview:d=>{ const src=(d.src||'').trim();
+      if(src&&/^https?:\/\//i.test(src)) return `<figure style="margin:14px 0"><img src="${esc(src)}" alt="${esc(d.caption||'')}" style="max-width:100%;border-radius:var(--radius)">${d.caption||d.credits?`<figcaption class="pv-media-m" style="margin-top:4px">${esc([d.caption,d.credits].filter(Boolean).join(' — '))}</figcaption>`:''}</figure>`;
+      if(src) return `<figure style="margin:14px 0"><div data-asset-prev="${esc(src)}"></div>${d.caption||d.credits?`<figcaption class="pv-media-m" style="margin-top:4px">${esc([d.caption,d.credits].filter(Boolean).join(' — '))}</figcaption>`:''}</figure>`;
+      return pvMedia('Image','▣',d.caption||'Image à fournir',[],d.credits); } },
   illustration_brief:{ label:'Brief illustration',
-    fields:[{k:'title',t:'text',label:'Titre'},{k:'style',t:'text',label:'Style souhaité'},{k:'referenceUrl',t:'text',label:'Référence (URL)'},{k:'body',t:'bigarea',label:'Brief illustration'}],
+    fields:[{k:'title',t:'text',label:'Titre'},{k:'style',t:'text',label:'Style souhaité'},
+      {k:'referenceUrl',t:'asset',label:'Référence visuelle',ph:'Lien, ou déposez une image d’inspiration',dzHint:'Déposez une image d’inspiration, ou collez son lien.'},
+      {k:'body',t:'bigarea',label:'Brief illustration'}],
     serialize:d=>fence('illustration_brief',A([['title',d.title],['style',d.style],['referenceUrl',d.referenceUrl]]),(d.body||'').trim()),
     preview:d=>pvCallout(d.title||'Illustration à produire',d.body,'') },
   motion_design:{ label:'Motion design',
@@ -1928,8 +2126,12 @@ function ytId(u){ const m=String(u||'').match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\
 function vimeoId(u){ const m=String(u||'').match(/vimeo\.com\/(?:video\/)?(\d+)/); return m?m[1]:null; }
 function mediaEmbed(type,d){
   const src=((d&&d.src)||'').trim();
-  if(!src) return `<div class="media-empty">${LL('Aucun média — ajoutez un lien dans « Métadonnées ».','No media — add a link under « Metadata ».')}</div>`;
-  if(type==='image'||/\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/i.test(src)) return `<img class="media-embed" src="${esc(src)}" alt="${esc(d.alt||'')}">${d.caption?`<div class="media-cap">${esc(d.caption)}</div>`:''}`;
+  if(!src) return `<div class="media-empty">${LL('Aucun média — déposez un fichier ci-dessous, ou collez un lien.','No media — drop a file below, or paste a link.')}</div>`;
+  // Média rangé dans le dossier du cours : relu depuis le disque (hydrateAssetPreviews).
+  const local=!/^(https?:|data:|blob:)/i.test(src);
+  const cap=[d.caption,d.credits].filter(Boolean).join(' — ');
+  if(local) return `<div class="media-embed" data-asset-prev="${esc(src)}"></div>${cap?`<div class="media-cap">${esc(cap)}</div>`:''}`;
+  if(type==='image'||/\.(png|jpe?g|gif|webp|svg|avif)(\?|#|$)/i.test(src)) return `<img class="media-embed" src="${esc(src)}" alt="${esc(d.caption||'')}">${cap?`<div class="media-cap">${esc(cap)}</div>`:''}`;
   if(type==='audio'||/\.(mp3|wav|ogg|m4a|aac|flac)(\?|#|$)/i.test(src)) return `<audio class="media-embed" controls src="${esc(src)}"></audio>`;
   if(type==='pdf'||/\.pdf(\?|#|$)/i.test(src)) return `<iframe class="media-embed media-pdf" src="${esc(src)}" loading="lazy"></iframe>`;
   const yt=ytId(src); if(yt) return `<div class="media-frame"><iframe src="https://www.youtube-nocookie.com/embed/${yt}" allowfullscreen loading="lazy"></iframe></div>`;
@@ -1941,7 +2143,7 @@ function mediaEmbed(type,d){
 function mediaCard(b,def){
   const open=(b.data&&b.data.src)?'':' open';   // si pas de source : déplié pour inviter à la saisir
   return `<div class="media-embed-wrap">${mediaEmbed(b.type,b.data||{})}</div>`
-    +`<details class="meta-fold"${open}><summary>${LL('Métadonnées','Metadata')} <span class="meta-hint">${LL('titre, source…','title, source…')}</span></summary>`
+    +`<details class="meta-fold"${open}><summary>${LL('Le média','The media')} <span class="meta-hint">${LL('fichier, légende, crédits','file, caption, credits')}</span></summary>`
     +`<div class="meta-body">${def.edit?def.edit(b.data,b.id):editGeneric(def,b.data)}</div></details>`;
 }
 
@@ -2053,6 +2255,26 @@ function bindWork(){
       card.querySelectorAll('[data-bf]').forEach(el=>{
         const ev=el.tagName==='SELECT'?'change':'input';
         el.addEventListener(ev,e=>{ d[el.dataset.bf]= el.type==='checkbox'? e.target.checked : e.target.value; markDirty(); refreshBadge(L); updateGauge(L); });
+      });
+      // champs média : dépôt de fichier + bouton Parcourir (le champ texte reste la source)
+      card.querySelectorAll('[data-drop]').forEach(zone=>{
+        const key=zone.dataset.drop;
+        const take=async file=>{
+          const rel=await attachAsset(file);
+          if(!rel) return;
+          d[key]=rel; markDirty(); renderWork();
+        };
+        ['dragenter','dragover'].forEach(ev=>zone.addEventListener(ev,e=>{
+          e.preventDefault(); e.stopPropagation(); zone.classList.add('over'); }));
+        ['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{
+          e.preventDefault(); e.stopPropagation(); zone.classList.remove('over'); }));
+        zone.addEventListener('drop',e=>{ const f=e.dataTransfer&&e.dataTransfer.files[0]; if(f) take(f); });
+        const br=zone.querySelector('[data-browse]');
+        if(br) br.addEventListener('click',()=>{
+          const inp=document.createElement('input'); inp.type='file';
+          inp.onchange=()=>{ const f=inp.files[0]; if(f) take(f); };
+          inp.click();
+        });
       });
       // réponses des QCM / choix unique
       card.querySelectorAll('[data-optb]').forEach(row=>{
@@ -2357,10 +2579,11 @@ const BLOCKPARSE={
   citation:(a,b)=>({ body:b, author:a.author||'', role:a.role||'', source:a.source||'' }),
   callout:(a,b)=>({ type:a.type||'note', title:a.title||'', body:b }),
   objectifs:(a,b)=>({ title:a.title||'Objectifs', text:fromBullets(b) }),
-  video_expert:(a,b)=>{ const s=splitTranscript(b); return { title:a.title||'', expert:a.expert||'', role:a.role||'', src:a.src||'', transcript:s.transcript }; },
-  video:(a,b)=>({ title:a.title||'', src:a.src||'', startTime:a.startTime||'', endTime:a.endTime||'', body:b }),
-  audio:(a,b)=>{ const s=splitTranscript(b); return { title:a.title||'', src:a.src||'', startTime:a.startTime||'', endTime:a.endTime||'', transcript:s.transcript, body:s.main }; },
-  image:(a,b)=>({ src:'', alt:a.alt||'', caption:a.caption||'', body:b }),
+  video_expert:(a,b)=>({ src:a.src||'', title:a.title||'', expert:a.expert||'', role:a.role||'', credits:a.credits||'' }),
+  video:(a,b)=>({ src:a.src||'', title:a.title||'', credits:a.credits||'' }),
+  audio:(a,b)=>({ src:a.src||'', title:a.title||'', credits:a.credits||'' }),
+  // `alt` est la forme historique de la légende (fences écrites avant la simplification).
+  image:(a,b)=>({ src:a.src||'', caption:a.caption||a.alt||'', credits:a.credits||'' }),
   illustration_brief:(a,b)=>({ title:a.title||'', style:a.style||'', referenceUrl:a.referenceUrl||'', body:b }),
   motion_design:(a,b)=>({ title:a.title||'', repoUrl:a.repoUrl||'', duration:a.duration||'', body:b }),
   interactive_module:(a,b)=>parseModuleBody(a,b),
@@ -2386,7 +2609,8 @@ function fenceToBlock(type,attrs,body){
 function nativeChunkToBlock(chunk){
   const t=chunk.trim();
   const img=t.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/);
-  if(img && !t.includes('\n')) return { type:'image', data:{ src:img[2], alt:img[1]||'', caption:img[3]||'', body:'' } };
+  // ![légende](src "crédits") — symétrique de la sérialisation du bloc image.
+  if(img && !t.includes('\n')) return { type:'image', data:{ src:img[2], caption:img[1]||'', credits:img[3]||'' } };
   const ls=t.split('\n');
   if(ls.length && ls.every(x=>/^[-*]\s+/.test(x))) return { type:'bullet_list', data:{ text:ls.map(x=>x.replace(/^[-*]\s+/,'')).join('\n') } };
   if(ls.length && ls.every(x=>/^\d+\.\s+/.test(x))) return { type:'numbered_list', data:{ text:ls.map(x=>x.replace(/^\d+\.\s+/,'')).join('\n') } };
@@ -2746,6 +2970,8 @@ function initFmtBar(){
         `<button role="menuitem" onclick="closeFileMenu();saveNow()"><span class="hm-ic">💾</span><span class="hm-key">${/Mac|iP/.test(navigator.platform)?'⌘S':'Ctrl+S'}</span>Enregistrer</button>`+
         `<button role="menuitem" onclick="closeFileMenu();saveAs()"><span class="hm-ic">⧉</span>Enregistrer sous…</button>`+
         `<div class="hm-sep"></div>`+
+        `<button role="menuitem" onclick="closeFileMenu();chooseCourseFolder()"><span class="hm-ic">🗂</span>Dossier des médias…</button>`+
+        `<div class="hm-sep"></div>`+
         `<button role="menuitem" onclick="closeFileMenu();openImport()"><span class="hm-ic">⤓</span>Importer un document…</button>`+
         `<div class="hm-sep"></div>`+
         `<button role="menuitem" onclick="closeFileMenu();openPreview()"><span class="hm-ic">◉</span>Aperçu</button>`+
@@ -2940,6 +3166,7 @@ initFmtBar(); restore(); render(); updateLangBtn(); document.documentElement.lan
 // Un brouillon restauré depuis le navigateur n'est pas une preuve d'enregistrement disque.
 diskDirty = courseHasContent();
 setFileChip(); restoreFileLink(); maybeNudge();
+restoreDirLink().then(()=>hydrateAssetPreviews(document));
 </script>
 </body>
 </html>
